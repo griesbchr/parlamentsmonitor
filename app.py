@@ -107,6 +107,26 @@ def teaser(shortinfo: str | None, max_len: int = 180) -> str:
     return text if len(text) <= max_len else text[:max_len].rsplit(" ", 1)[0] + " …"
 
 
+_PARTY_NAMES = {"ÖVP": "ÖVP", "SPÖ": "SPÖ", "FPÖ": "FPÖ", "GRÜNE": "GRÜNE", "GRÜNEN": "GRÜNE",
+                "NEOS": "NEOS"}
+
+
+def proposers(title: str | None, doktyp: str | None) -> list[str]:
+    """
+    Who proposed the item: parties named in a motion's title, e.g.
+    "Mineralölsteuergesetz, Änderung (ÖVP, SPÖ, NEOS)", or "Bundesregierung"
+    for government bills. Empty if unknown (committee reports, accounts).
+    """
+    m = re.search(r"\(([^()]*)\)\s*$", title or "")
+    if m:
+        names = [n.strip().upper() for n in m.group(1).split(",")]
+        if names and all(n in _PARTY_NAMES for n in names):
+            return sorted({_PARTY_NAMES[n] for n in names})
+    if doktyp in ("RV", "RVS"):
+        return ["Bundesregierung"]
+    return []
+
+
 def get_conn():
     return db.connect()
 
@@ -183,6 +203,7 @@ def api_items():
             "teaser":         teaser(r["shortinfo"]),
             "topics":         tags.get(r["id"], {}).get("topic", []),
             "headwords":      tags.get(r["id"], {}).get("headword", []),
+            "proposers":      proposers(r["title"], r["doktyp"]),
         })
 
     return jsonify(items)
