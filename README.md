@@ -114,13 +114,6 @@ The database and the manifesto texts are not part of the repository. To rebuild 
 
 ---
 
-## Visitor statistics
-
-Off by default. To enable cookie-free counting, create a free [GoatCounter](https://www.goatcounter.com)
-site and set `GOATCOUNTER_CODE` in `export_static.py`; the Impressum's privacy section adapts automatically.
-
----
-
 ## License
 
 Code: [MIT](LICENSE)
