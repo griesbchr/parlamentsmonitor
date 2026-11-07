@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Logs
+*.log
+weekly_update.log
+
+# Temp / scratch files
+check_db.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# SQLite WAL-Dateien
+parliament.db-shm
+parliament.db-wal
+
+# Claude Code
+.claude/
+
+# Local scraper state (machine-specific, not for version control)
+.last_scrape
+
+# Secrets (never commit)
+.env
+*.env
+
+*.pdf
+
+# Static GitHub Pages export (its own git repo)
+site/
+
+# Project virtual environment
+.venv/
+
+# Not published: database (rebuilt by the scripts) and full manifesto texts (copyright of the parties)
+parliament.db
+parliament.db-*
+manifestos/*.txt
+vote_analysis_batch.json

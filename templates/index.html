@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Parlamentsmonitor – Stimmen Österreichs Parteien so ab, wie sie es versprochen haben?</title>
+  <meta name="description" content="Alle Beschlüsse des Nationalrats der XXVIII. GP, das Abstimmungsverhalten der Parteien und eine KI-Einschätzung, ob es zum jeweiligen Wahlprogramm passt.">
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --surface: #fff;
+      --ink: #1a1a2e;
+      --ink-2: #4b5563;
+      --ink-3: #8a919c;
+      --line: #e5e7eb;
+      --accent: #3b5bdb;
+      --accent-soft: #eef0ff;
+      --for: #2e7d32;
+      --against: #c62828;
+      --contra: #b91c1c;
+      --contra-soft: #fee2e2;
+      --warn: #b45309;
+      --warn-soft: #fff3cd;
+      --radius: 10px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    a { color: var(--accent); }
+
+    /* ── Header ── */
+    header {
+      background: var(--ink);
+      color: #fff;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-shrink: 0;
+    }
+    .brand { cursor: pointer; text-decoration: none; color: #fff; }
+    .brand h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: .2px; }
+    .brand p  { font-size: .78rem; opacity: .65; margin-top: 1px; }
+    header nav { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: .82rem; }
+    header nav a { color: #fff; opacity: .8; text-decoration: none; }
+    header nav a:hover, header nav a.active { opacity: 1; text-decoration: underline; }
+    #header-stand { opacity: .55; white-space: nowrap; }
+
+    /* ── Filter bar ── */
+    #filterbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 10px 24px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .search-wrap { position: relative; flex: 1; min-width: 180px; }
+    .search-wrap svg {
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      width: 15px; height: 15px; color: #aaa; pointer-events: none;
+    }
+    #search {
+      width: 100%;
+      padding: 7px 12px 7px 32px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: .88rem;
+      color: #222;
+      background: #fafafa;
+      font-family: inherit;
+    }
+    #search:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgba(59,91,219,.08); }
+
+    .multiselect-wrap { position: relative; }
+    .multiselect-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 10px;
+      border: 1px solid #ddd; border-radius: 6px;
+      font-size: .85rem; color: #444; background: #fafafa;
+      cursor: pointer; font-family: inherit; white-space: nowrap;
+    }
+    .multiselect-btn:hover { border-color: #aaa; background: #fff; }
+    .multiselect-btn svg { width: 13px; height: 13px; color: #999; }
+    .multiselect-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+    .multiselect-menu {
+      display: none; position: absolute; top: calc(100% + 4px); right: 0;
+      background: #fff; border: 1px solid #ddd; border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.1); padding: 6px 0; z-index: 200;
+      min-width: 230px; white-space: nowrap;
+    }
+    .multiselect-menu.open { display: block; }
+    .ms-item { display: flex; align-items: center; gap: 10px; padding: 8px 14px; cursor: pointer; font-size: .85rem; color: #333; user-select: none; }
+    .ms-item:hover { background: #f0f4ff; }
+    .ms-item input { width: 15px; height: 15px; accent-color: var(--accent); }
+    .ms-item.ms-all { font-size: .78rem; color: #888; border-bottom: 1px solid #f0f0f0; }
+    .ms-badge { font-size: .68rem; font-weight: 700; padding: 2px 6px; border-radius: 8px; background: #e8eaf6; color: var(--accent); min-width: 30px; text-align: center; }
+
+    #filterbar select {
+      appearance: none; -webkit-appearance: none;
+      padding: 7px 28px 7px 10px;
+      border: 1px solid #ddd; border-radius: 6px;
+      font-size: .85rem; color: #444; background-color: #fafafa;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+      background-repeat: no-repeat; background-position: right 8px center; background-size: 13px;
+      cursor: pointer; font-family: inherit;
+    }
+    #filterbar select:hover { border-color: #aaa; background-color: #fff; }
+    #filterbar select.active { border-color: var(--accent); background-color: var(--accent-soft); color: var(--accent); font-weight: 500; }
+    #filterContra.active { border-color: var(--contra); background-color: var(--contra-soft); color: var(--contra); }
+    .filter-sep { width: 1px; height: 22px; background: var(--line); margin: 0 2px; }
+    #count { font-size: .8rem; color: #999; white-space: nowrap; min-width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* ── Main layout ── */
+    #main { display: flex; flex: 1; overflow: hidden; }
+    #list { width: 410px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--line); background: var(--surface); }
+    #detail { flex: 1; overflow-y: auto; padding: 28px 32px; background: var(--bg); }
+    #back-btn { display: none; }
+    .loading { text-align: center; padding: 40px; color: #aaa; }
+
+    /* ── List cards ── */
+    .item-card { padding: 14px 18px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background .12s; border-left: 3px solid transparent; }
+    .item-card:hover { background: #f8f9ff; }
+    .item-card.active { background: var(--accent-soft); border-left-color: var(--accent); }
+    .item-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
+    .item-zitation { font-weight: 600; font-size: .78rem; color: var(--accent); }
+    .item-datum { font-size: .75rem; color: #888; }
+    .badge { font-size: .66rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; background: #e8eaf6; color: var(--accent); }
+    .item-title { font-size: .9rem; line-height: 1.35; color: #222; font-weight: 600; margin-bottom: 4px; }
+    .item-teaser {
+      font-size: .8rem; line-height: 1.4; color: var(--ink-2); margin-bottom: 8px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .contra-badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: .7rem; font-weight: 700; padding: 3px 8px; border-radius: 10px;
+      background: var(--warn-soft); color: var(--warn); border: 1px solid #fcd34d;
+      margin-bottom: 8px;
+    }
+    .contra-badge.strong { background: var(--contra-soft); color: var(--contra); border-color: #fca5a5; }
+
+    /* vote line: ✓ chips  ✗ chips */
+    .vote-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: .72rem; }
+    .vote-group { display: inline-flex; align-items: center; gap: 3px; }
+    .vote-icon { font-weight: 800; font-size: .8rem; width: 12px; text-align: center; }
+    .vote-icon.for { color: var(--for); }
+    .vote-icon.against { color: var(--against); }
+    .chip { font-size: .7rem; font-weight: 700; padding: 2px 7px; border-radius: 10px; color: #fff; white-space: nowrap; }
+    .chip.unanimous { background: #e8f5e9; color: var(--for); }
+
+    /* ── Cards in the detail panel ── */
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 18px; }
+    .card h3, .section-title {
+      font-size: .76rem; text-transform: uppercase; letter-spacing: .5px; color: #888; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .ai-label {
+      font-size: .66rem; letter-spacing: 0; text-transform: none; font-weight: 700;
+      padding: 2px 8px; border-radius: 8px; background: #f3e8ff; color: #7c3aed; border: 1px solid #d8b4fe;
+    }
+    .muted { color: var(--ink-3); font-size: .82rem; }
+
+    /* ── Overview (landing) ── */
+    .intro h2 { font-size: 1.35rem; line-height: 1.3; margin-bottom: 8px; }
+    .intro p { font-size: .92rem; line-height: 1.6; color: var(--ink-2); max-width: 760px; }
+    .intro .disclaimer { margin-top: 10px; font-size: .82rem; }
+    .scoreboard { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+    .party-card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 14px 16px; cursor: pointer; border-top: 4px solid var(--pc);
+      transition: box-shadow .15s, transform .15s; text-align: left; font-family: inherit; color: inherit;
+    }
+    .party-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.08); transform: translateY(-1px); }
+    .party-card .pname { font-weight: 800; font-size: 1rem; }
+    .party-card .big { font-size: 2rem; font-weight: 800; line-height: 1.1; margin-top: 8px; color: var(--contra); font-variant-numeric: tabular-nums; }
+    .party-card .big.zero { color: var(--ink-3); }
+    .party-card .lbl { font-size: .76rem; color: var(--ink-2); }
+    .party-card .sub { font-size: .74rem; color: var(--ink-3); margin-top: 8px; }
+    .distbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 10px; background: #f3f4f6; }
+    .distbar span { display: block; height: 100%; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .74rem; color: var(--ink-2); margin-top: 12px; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+    .recent-row { display: flex; gap: 12px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+    .recent-row:last-child { border-bottom: none; }
+    .recent-row:hover .recent-title { color: var(--accent); }
+    .recent-date { font-size: .75rem; color: #888; white-space: nowrap; width: 76px; flex-shrink: 0; }
+    .recent-title { font-size: .88rem; font-weight: 600; line-height: 1.35; }
+    .recent-parties { margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap; }
+
+    /* ── Detail ── */
+    .detail-header { margin-bottom: 18px; }
+    .detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: .82rem; margin-bottom: 6px; }
+    .detail-zitation { color: var(--accent); font-weight: 600; }
+    .detail-title { font-size: 1.3rem; font-weight: 750; line-height: 1.3; margin-bottom: 8px; }
+    .detail-description { font-size: .86rem; color: var(--ink-2); line-height: 1.5; }
+    .link-btn {
+      font-size: .78rem; border: 1px solid var(--line); background: var(--surface); border-radius: 6px;
+      padding: 3px 9px; cursor: pointer; font-family: inherit; color: var(--ink-2); text-decoration: none;
+    }
+    .link-btn:hover { border-color: #aaa; color: var(--ink); }
+    .shortinfo { font-size: .9rem; line-height: 1.6; }
+    .shortinfo ul { padding-left: 20px; }
+    .shortinfo li { margin-bottom: 4px; }
+    .vote-rows { display: grid; gap: 10px; }
+    .vote-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .vote-row .vlabel { font-size: .8rem; font-weight: 700; width: 78px; }
+    .vote-row .vlabel.for { color: var(--for); }
+    .vote-row .vlabel.against { color: var(--against); }
+    .vote-badge { font-size: .82rem; font-weight: 700; padding: 4px 12px; border-radius: 14px; color: #fff; }
+
+    /* analysis rows */
+    .scale-info { font-size: .8rem; color: var(--ink-2); margin: -4px 0 14px; }
+    .scale-info summary { cursor: pointer; color: var(--accent); width: fit-content; }
+    .scale-info table { margin-top: 8px; border-collapse: collapse; }
+    .scale-info td { padding: 3px 10px 3px 0; vertical-align: top; }
+    .analyse-row { border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px; overflow: hidden; background: var(--surface); }
+    .analyse-row.contra { border-color: #fca5a5; border-left: 4px solid var(--contra); }
+    .analyse-row-header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; user-select: none; }
+    .analyse-row-header:hover { background: #f8f9ff; }
+    .analyse-party-badge { font-size: .76rem; font-weight: 700; padding: 3px 9px; border-radius: 10px; color: #fff; min-width: 56px; text-align: center; }
+    .analyse-vote-dir { font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 8px; }
+    .analyse-vote-dir.ja   { background: #e8f5e9; color: var(--for); }
+    .analyse-vote-dir.nein { background: #fce4ec; color: var(--against); }
+    .analyse-vote-dir.enth { background: #f3f4f6; color: #6b7280; }
+    .analyse-score-badge { font-size: .75rem; font-weight: 700; padding: 3px 10px; border-radius: 10px; }
+    .score-m2 { background: #fee2e2; color: #b91c1c; }
+    .score-m1 { background: #ffedd5; color: #c2410c; }
+    .score-0  { background: #f3f4f6; color: #6b7280; }
+    .score-p1 { background: #dcfce7; color: #15803d; }
+    .score-p2 { background: #bbf7d0; color: #166534; }
+    .analyse-hint { font-size: .78rem; color: var(--ink-3); margin-left: auto; }
+    .analyse-chevron { width: 14px; height: 14px; color: #bbb; flex-shrink: 0; transition: transform .2s; }
+    .analyse-row.expanded .analyse-chevron { transform: rotate(180deg); }
+    .analyse-row-body { display: none; padding: 4px 16px 16px; border-top: 1px solid #f0f0f0; }
+    .analyse-row.expanded .analyse-row-body { display: block; }
+    .block { margin-top: 14px; }
+    .block-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #888; margin-bottom: 6px; }
+    .block-label .who { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--ink-3); }
+    .statement { font-size: .86rem; line-height: 1.55; background: #eef4ff; border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 0 6px 6px 0; }
+    .quote {
+      font-size: .82rem; color: #444; line-height: 1.6; background: #f8f9fa; border-left: 3px solid #d1d5db;
+      padding: 10px 14px; border-radius: 0 6px 6px 0; white-space: pre-wrap; max-height: 320px; overflow-y: auto;
+    }
+    .assessment { font-size: .86rem; line-height: 1.55; background: #faf5ff; border-left: 3px solid #a78bfa; padding: 10px 14px; border-radius: 0 6px 6px 0; }
+    .sources { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-size: .78rem; }
+    .consistent-group { border: 1px dashed #d1d5db; border-radius: 8px; padding: 10px 12px; }
+    .consistent-group > summary { cursor: pointer; font-size: .84rem; color: var(--ink-2); list-style: none; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .consistent-group > summary::-webkit-details-marker { display: none; }
+    .consistent-group > summary .more { color: var(--accent); margin-left: auto; font-size: .8rem; }
+    .consistent-group[open] > summary { margin-bottom: 10px; }
+    .consistent-group[open] > summary .more { visibility: hidden; }
+
+    .tags-section { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag { font-size: .75rem; padding: 3px 10px; border-radius: 12px; background: #e8eaf6; color: var(--accent); }
+    .tag.headword { background: #e8f5e9; color: var(--for); }
+    .tag.topic    { background: #fff3e0; color: #e65100; }
+    .doc-links { display: grid; gap: 6px; font-size: .86rem; }
+    .doc-tab-bar { display: flex; gap: 4px; flex-wrap: wrap; }
+    .doc-tab { padding: 7px 14px; border: 1px solid #ddd; border-bottom: none; border-radius: 6px 6px 0 0; font-size: .8rem; cursor: pointer; background: #f0f0f0; color: #555; }
+    .doc-tab.active { background: #fff; color: var(--ink); font-weight: 600; }
+    .doc-frame { width: 100%; height: 600px; border: 1px solid #ddd; border-radius: 0 6px 6px 6px; background: #fff; }
+
+    /* ── Topics ── */
+    .topic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+    .topic-card {
+      display: block; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 14px 16px; text-decoration: none; color: inherit; transition: box-shadow .15s, transform .15s;
+    }
+    .topic-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.08); transform: translateY(-1px); }
+    .topic-name { font-weight: 750; font-size: .98rem; margin-bottom: 4px; }
+    .topic-count { font-size: .8rem; color: var(--ink-2); }
+    .topic-contra { color: var(--contra); font-weight: 600; }
+    .topic-hw { font-size: .74rem; color: var(--ink-3); margin-top: 8px; line-height: 1.4; }
+    .party-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+    .party-table th { text-align: left; font-size: .72rem; color: #888; font-weight: 600; padding: 0 8px 8px 0; }
+    .party-table td { padding: 7px 8px 7px 0; border-top: 1px solid #f0f0f0; vertical-align: middle; }
+    .party-table .num { text-align: right; width: 110px; font-variant-numeric: tabular-nums; }
+    .party-table .contra-num { color: var(--contra); font-weight: 700; }
+    .vbar-cell { width: 55%; }
+    .vbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: #f3f4f6; }
+    .vbar-pro { background: #4caf50; }
+    .vbar-con { background: #e57373; }
+    .vbar-lbl { display: flex; justify-content: space-between; font-size: .72rem; color: var(--ink-3); margin-top: 3px; }
+    .hw-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .hw-chip {
+      font-size: .76rem; padding: 4px 10px; border-radius: 14px; border: 1px solid var(--line);
+      background: #fafafa; color: var(--ink-2); cursor: pointer; font-family: inherit; text-decoration: none;
+    }
+    .hw-chip span { color: var(--ink-3); margin-left: 2px; }
+    .hw-chip:hover { border-color: #aaa; color: var(--ink); }
+    .hw-chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+    .topic-item { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid #f0f0f0; text-decoration: none; color: inherit; }
+    .topic-item:hover .topic-item-title { color: var(--accent); }
+    .topic-item-date { font-size: .75rem; color: #888; width: 76px; flex-shrink: 0; padding-top: 2px; }
+    .topic-item-title { font-size: .88rem; font-weight: 600; line-height: 1.35; margin-bottom: 3px; }
+    .party-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .party-tab {
+      font-family: inherit; font-size: .8rem; font-weight: 700; padding: 5px 12px; border-radius: 14px;
+      border: 2px solid var(--pc); background: #fff; color: var(--ink); cursor: pointer;
+    }
+    .party-tab span { font-weight: 500; color: var(--ink-3); }
+    .party-tab.active { background: var(--pc); color: #fff; }
+    .party-tab.active span { color: rgba(255,255,255,.8); }
+    .mf-section { border-top: 1px solid #f0f0f0; padding: 8px 0; }
+    .mf-section summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--ink-2); }
+    .mf-section summary:hover { color: var(--accent); }
+    .mf-section .quote { margin-top: 8px; }
+    a.tag { text-decoration: none; }
+    a.tag:hover { text-decoration: underline; }
+
+    /* ── Wer stimmt mit wem ── */
+    .am-wrap { overflow-x: auto; }
+    .am { border-collapse: separate; border-spacing: 3px; font-size: .8rem; }
+    .am th { font-weight: 400; padding: 2px; }
+    .am td { width: 64px; height: 34px; text-align: center; border-radius: 6px; font-weight: 700;
+             font-variant-numeric: tabular-nums; }
+    .am-self, .am-na { background: #f3f4f6; color: var(--ink-3); }
+
+    /* ── Party pages ── */
+    .party-header { border-left: 6px solid var(--pc); padding: 4px 0 4px 14px; margin-bottom: 18px; }
+    .party-header-name { font-size: 1.6rem; font-weight: 800; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 12px; }
+    .kpi-num { font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .kpi-num.contra-num { color: var(--contra); }
+    .kpi-lbl { font-size: .76rem; color: var(--ink-2); }
+    .partner-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+    .partner-row a { width: 64px; text-decoration: none; }
+    .partner-bar { flex: 1; height: 10px; background: #f3f4f6; border-radius: 5px; overflow: hidden; }
+    .partner-bar span { display: block; height: 100%; }
+    .partner-pct { width: 44px; text-align: right; font-size: .82rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* ── Report button ── */
+    .report-row { margin-top: 8px; text-align: right; }
+    .report-btn { font-size: .76rem; color: var(--ink-3); text-decoration: none; border: 1px solid var(--line);
+                  border-radius: 6px; padding: 3px 9px; }
+    .report-btn:hover { color: var(--contra); border-color: #fca5a5; background: var(--contra-soft); }
+
+    /* ── Methodik ── */
+    .prose { font-size: .92rem; line-height: 1.65; color: #2b2f3a; max-width: 780px; }
+    .prose h2 { font-size: 1.35rem; margin-bottom: 10px; color: var(--ink); }
+    .prose h3 { font-size: 1rem; margin: 22px 0 6px; color: var(--ink); text-transform: none; letter-spacing: 0; display: block; }
+    .prose p, .prose ul, .prose ol { margin-bottom: 10px; }
+    .prose ul, .prose ol { padding-left: 22px; }
+    .prose table { border-collapse: collapse; margin: 6px 0 10px; }
+    .prose td { padding: 4px 12px 4px 0; vertical-align: top; }
+
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--ink); color: #fff; padding: 8px 16px; border-radius: 8px; font-size: .85rem;
+      opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 500;
+    }
+    .toast.show { opacity: 1; }
+
+    /* ── Narrow screens ── */
+    @media (max-width: 800px) {
+      header { padding: 10px 16px; gap: 10px; flex-wrap: wrap; }
+      .brand p { display: none; }
+      header nav { gap: 12px; }
+      #filterbar { padding: 8px 16px; gap: 6px; }
+      .search-wrap { flex-basis: 100%; }
+      #filterbar select { flex: 1 1 40%; min-width: 0; }
+      #filterZeitraum, #doktypWrap, .filter-sep, #count { display: none; }
+      #list { width: 100%; border-right: none; }
+      #detail { display: none; }
+      #detail.mobile-open {
+        display: block; position: fixed; inset: 0; z-index: 100; padding: 0 16px 24px;
+      }
+      #back-btn {
+        display: flex; align-items: center; gap: 8px; margin: 0 -16px 16px; padding: 12px 16px;
+        background: var(--ink); color: #fff; font-size: .9rem; cursor: pointer; border: none;
+        width: calc(100% + 32px); position: sticky; top: 0; z-index: 2; font-family: inherit;
+      }
+      .analyse-row-header { flex-wrap: wrap; }
+      .analyse-hint { display: none; }
+      .detail-title { font-size: 1.15rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="brand" href="#/" title="Zur Übersicht">
+    <h1>Parlamentsmonitor</h1>
+    <p>Stimmen Österreichs Parteien so ab, wie sie es im Wahlprogramm versprochen haben?</p>
+  </a>
+  <nav>
+    <a href="#/uebersicht" id="nav-overview">Übersicht</a>
+    <a href="#/themen" id="nav-topics">Themen</a>
+    <a href="#/methodik" id="nav-method">Methodik</a>
+    <a href="#/impressum" id="nav-imprint">Impressum</a>
+    <span id="header-stand">XXVIII. GP</span>
+  </nav>
+</header>
+
+<div id="filterbar">
+  <div class="search-wrap">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    <input id="search" type="text" placeholder="Suche nach Titel, Inhalt oder Zitation…">
+  </div>
+  <select id="filterThema" title="Thema laut Parlament">
+    <option value="">Alle Themen</option>
+  </select>
+  <select id="filterContra" title="Beschlüsse, bei denen eine Partei laut KI-Einschätzung gegen ihr Wahlprogramm gestimmt hat">
+    <option value="">Alle Beschlüsse</option>
+    <option value="any">⚠ Nur mit Widerspruch</option>
+    <optgroup label="Widerspruch der Partei">
+      <option value="ÖVP">⚠ ÖVP</option>
+      <option value="SPÖ">⚠ SPÖ</option>
+      <option value="FPÖ">⚠ FPÖ</option>
+      <option value="GRÜNE">⚠ GRÜNE</option>
+      <option value="NEOS">⚠ NEOS</option>
+    </optgroup>
+  </select>
+  <select id="filterClub">
+    <option value="">Alle Abstimmungen</option>
+    <option value="__unanimous">Einstimmig</option>
+    <optgroup label="Dafür gestimmt">
+      <option value="ÖVP:1">ÖVP dafür</option>
+      <option value="SPÖ:1">SPÖ dafür</option>
+      <option value="FPÖ:1">FPÖ dafür</option>
+      <option value="GRÜNE:1">GRÜNE dafür</option>
+      <option value="NEOS:1">NEOS dafür</option>
+    </optgroup>
+    <optgroup label="Dagegen gestimmt">
+      <option value="ÖVP:0">ÖVP dagegen</option>
+      <option value="SPÖ:0">SPÖ dagegen</option>
+      <option value="FPÖ:0">FPÖ dagegen</option>
+      <option value="GRÜNE:0">GRÜNE dagegen</option>
+      <option value="NEOS:0">NEOS dagegen</option>
+    </optgroup>
+  </select>
+  <select id="filterZeitraum">
+    <option value="">Alle Tagungen</option>
+  </select>
+  <div class="multiselect-wrap" id="doktypWrap">
+    <button class="multiselect-btn" id="doktypBtn" type="button">
+      <span id="doktypLabel">Alle Typen</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div class="multiselect-menu" id="doktypMenu">
+      <label class="ms-item ms-all"><input type="checkbox" id="doktypAll" checked> Alle auswählen / abwählen</label>
+      <label class="ms-item"><input type="checkbox" class="doktyp-check" value="RV"  checked> <span class="ms-badge">RV</span>  Regierungsvorlage</label>
+      <label class="ms-item"><input type="checkbox" class="doktyp-check" value="AA"  checked> <span class="ms-badge">AA</span>  Ausschussantrag</label>
+      <label class="ms-item"><input type="checkbox" class="doktyp-check" value="A"   checked> <span class="ms-badge">A</span>   Selbständiger Antrag</label>
+      <label class="ms-item"><input type="checkbox" class="doktyp-check" value="BUA" checked> <span class="ms-badge">BUA</span> Bericht und Antrag</label>
+      <label class="ms-item"><input type="checkbox" class="doktyp-check" value="BRA" checked> <span class="ms-badge">BRA</span> Bundesrechnungsabschluss</label>
+    </div>
+  </div>
+  <div class="filter-sep"></div>
+  <select id="sortBy">
+    <option value="relevance_desc">Relevanteste zuerst</option>
+    <option value="date_desc">Neueste zuerst</option>
+    <option value="date_asc">Älteste zuerst</option>
+    <option value="contra_desc">Meiste Widersprüche</option>
+    <option value="media_desc">Meiste Medienberichte</option>
+    <option value="controversy_desc">Knappste Mehrheit</option>
+    <option value="controversy_asc">Breiteste Mehrheit</option>
+  </select>
+  <span id="count"></span>
+</div>
+
+<div id="main">
+  <div id="list"><div class="loading">Lade Daten…</div></div>
+  <div id="detail">
+    <button id="back-btn" onclick="goBack()">← Zurück zur Liste</button>
+    <div id="detail-content"><div class="loading">Lade…</div></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>{% raw %}
+// Static mode: the GitHub Pages export (export_static.py) adds <meta name="static-site">
+// and ships the data as JSON files instead of the Flask /api endpoints.
+const STATIC = !!document.querySelector('meta[name="static-site"]');
+const API = {
+  items:    STATIC ? 'data/items.json'    : '/api/items',
+  tagungen: STATIC ? 'data/tagungen.json' : '/api/tagungen',
+  themen:   STATIC ? 'data/themen.json'   : '/api/themen',
+  thema:    slug => STATIC ? `data/themen/${slug}.json` : `/api/themen/${slug}`,
+};
+const PARL = 'https://www.parlament.gv.at';
+const ISSUES_URL = 'https://github.com/griesbchr/parlamentsmonitor/issues';
+const PARTIES = ['ÖVP', 'SPÖ', 'FPÖ', 'GRÜNE', 'NEOS'];
+const PARTY_COLORS = { 'ÖVP': '#62C3D0', 'SPÖ': '#E3000F', 'FPÖ': '#0052FB', 'GRÜNE': '#57A12B', 'NEOS': '#E3257B' };
+const DEFAULT_TITLE = document.title;
+
+const SCORE_META = {
+  '-2': { cls: 'score-m2', label: 'Klarer Widerspruch',     color: '#dc2626' },
+  '-1': { cls: 'score-m1', label: 'Leichter Widerspruch',   color: '#fb923c' },
+   '0': { cls: 'score-0',  label: 'Kein Bezug',             color: '#d1d5db' },
+   '1': { cls: 'score-p1', label: 'Im Einklang',            color: '#4ade80' },
+   '2': { cls: 'score-p2', label: 'Wahlversprechen umgesetzt', color: '#16a34a' },
+};
+const DOKTYP_NAMES = {
+  'RV': 'Regierungsvorlage', 'AA': 'Ausschussantrag', 'A': 'Selbständiger Antrag',
+  'BUA': 'Bericht und Antrag', 'BRA': 'Bundesrechnungsabschluss', 'RVS': 'Regierungsvorlage (Sonderfall)',
+};
+
+let allItems = [];
+let itemsById = {};
+let tagungen = [];
+let themen = [];      // [{name, slug, areas}]
+let currentDocs = [];
+let currentItem = null;   // decision shown in the detail view (for report links)
+
+// ── Helpers ───────────────────────────────────────────────
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function parseDatum(datum) {            // "DD.MM.YYYY" → timestamp
+  if (!datum) return 0;
+  const [d, m, y] = datum.split('.');
+  return new Date(+y, +m - 1, +d).getTime();
+}
+function partyColor(p) { return PARTY_COLORS[p] || '#888'; }
+function chip(p) { return `<span class="chip" style="background:${partyColor(p)}">${escHtml(p)}</span>`; }
+function contraParties(item) {
+  return PARTIES.filter(p => item.scores && item.scores[p] !== undefined && item.scores[p] <= -1);
+}
+function scoreText(s) { return `${s > 0 ? '+' : ''}${s}`; }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// ── Data loading ──────────────────────────────────────────
+Promise.all([
+  fetch(API.items).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+  fetch(API.tagungen).then(r => r.json()).catch(() => []),
+  fetch(API.themen).then(r => r.json()).catch(() => []),
+]).then(([items, tags, topics]) => {
+  allItems = items;
+  itemsById = Object.fromEntries(items.map(i => [i.id, i]));
+  tagungen = tags;
+  themen = topics;
+
+  const topicSel = document.getElementById('filterThema');
+  topicStats().forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.name; opt.textContent = `${t.name} (${t.count})`;
+    topicSel.appendChild(opt);
+  });
+
+  const newest = items.reduce((a, b) => parseDatum(b.datum) > parseDatum(a.datum) ? b : a, items[0]);
+  if (newest && newest.datum) document.getElementById('header-stand').textContent = `Stand ${newest.datum}`;
+
+  const sel = document.getElementById('filterZeitraum');
+  [...tags].reverse().forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.key; opt.textContent = t.label;
+    sel.appendChild(opt);
+  });
+
+  updateAndRender();
+  route();
+}).catch(err => {
+  document.getElementById('list').innerHTML =
+    `<div class="loading" style="color:#c62828">Fehler beim Laden: ${escHtml(err.message)}</div>`;
+});
+
+// ── Routing ───────────────────────────────────────────────
+//   #/ or empty      overview (desktop: right panel; phones: just the list)
+//   #/uebersicht     overview (phones: opens as its own screen)
+//   #/beschluss/<id> one decision
+//   #/methodik       methodology
+//   #/themen, #/thema/<slug>, #/partei/<name>, #/impressum
+window.addEventListener('hashchange', route);
+
+function route() {
+  const [page, arg] = location.hash.replace(/^#\/?/, '').split('/');
+  document.getElementById('nav-overview').classList.toggle('active', !page || page === 'uebersicht' || page === 'partei');
+  document.getElementById('nav-method').classList.toggle('active', page === 'methodik');
+  document.getElementById('nav-topics').classList.toggle('active', page === 'themen' || page === 'thema');
+  document.getElementById('nav-imprint').classList.toggle('active', page === 'impressum');
+  document.querySelectorAll('.item-card').forEach(c =>
+    c.classList.toggle('active', page === 'beschluss' && c.dataset.id === arg));
+
+  if (page === 'beschluss' && arg) loadDetail(+arg);
+  else if (page === 'methodik')   renderMethod();
+  else if (page === 'impressum')  renderImprint();
+  else if (page === 'themen')     renderTopics();
+  else if (page === 'thema' && arg)  renderTopic(decodeURIComponent(arg));
+  else if (page === 'partei' && arg) renderParty(decodeURIComponent(arg));
+  else { document.title = DEFAULT_TITLE; renderOverview(); }
+
+  // phones: the right panel is an overlay, open for everything except the plain list
+  const detail = document.getElementById('detail');
+  detail.classList.toggle('mobile-open', !!page);
+  detail.scrollTop = 0;
+  countPageView();
+}
+
+// Visitor statistics (GoatCounter) – only active if export_static.py injected the
+// script (GOATCOUNTER_CODE set). Counts each hash route as a page view.
+function countPageView(retries = 10) {
+  if (!document.querySelector('script[data-goatcounter]')) return;
+  if (window.goatcounter && window.goatcounter.count) {
+    window.goatcounter.count({ path: '/' + (location.hash || '#/'), title: document.title });
+  } else if (retries > 0) {
+    setTimeout(() => countPageView(retries - 1), 500);   // script still loading
+  }
+}
+
+function goBack() { location.hash = ''; }
+
+// ── Doktyp multiselect ────────────────────────────────────
+const doktypBtn = document.getElementById('doktypBtn');
+const doktypMenu = document.getElementById('doktypMenu');
+const doktypAllCb = document.getElementById('doktypAll');
+const TOTAL_DOKS = document.querySelectorAll('.doktyp-check').length;
+
+doktypBtn.addEventListener('click', e => { e.stopPropagation(); doktypMenu.classList.toggle('open'); });
+document.addEventListener('click', e => {
+  if (!document.getElementById('doktypWrap').contains(e.target)) doktypMenu.classList.remove('open');
+});
+function getSelectedDoks() { return [...document.querySelectorAll('.doktyp-check:checked')].map(c => c.value); }
+function updateDoktypState() {
+  const selected = getSelectedDoks();
+  const all = selected.length === TOTAL_DOKS, none = selected.length === 0;
+  doktypAllCb.checked = all;
+  doktypAllCb.indeterminate = !all && !none;
+  document.getElementById('doktypLabel').textContent = all ? 'Alle Typen' : none ? 'Kein Typ' : selected.join(', ');
+  doktypBtn.classList.toggle('active', !all);
+  updateAndRender();
+}
+document.querySelectorAll('.doktyp-check').forEach(cb => cb.addEventListener('change', updateDoktypState));
+doktypAllCb.addEventListener('change', () => {
+  document.querySelectorAll('.doktyp-check').forEach(cb => cb.checked = doktypAllCb.checked);
+  updateDoktypState();
+});
+
+// ── Filtering ─────────────────────────────────────────────
+function filtered() {
+  const q      = document.getElementById('search').value.toLowerCase().trim();
+  const tagKey = document.getElementById('filterZeitraum').value;
+  const club   = document.getElementById('filterClub').value;
+  const contra = document.getElementById('filterContra').value;
+  const thema  = document.getElementById('filterThema').value;
+  const doks   = new Set(getSelectedDoks());
+
+  let tagVon = 0, tagBis = Infinity;
+  if (tagKey) {
+    const tag = tagungen.find(t => t.key === tagKey);
+    if (tag) {
+      tagVon = tag.von ? new Date(tag.von).getTime() : 0;
+      tagBis = tag.bis ? new Date(tag.bis).getTime() + 86400000 : Infinity;
+    }
+  }
+
+  return allItems.filter(item => {
+    if (q && ![item.title, item.zitation, item.teaser, item.description]
+          .some(f => (f || '').toLowerCase().includes(q))) return false;
+    if (doks.size < TOTAL_DOKS && !doks.has(item.doktyp)) return false;
+    if (thema && !(item.topics || []).includes(thema)) return false;
+    if (tagKey) {
+      const ts = parseDatum(item.datum);
+      if (ts < tagVon || ts > tagBis) return false;
+    }
+    if (contra === 'any' && !contraParties(item).length) return false;
+    if (contra && contra !== 'any' && !contraParties(item).includes(contra)) return false;
+    if (club === '__unanimous') {
+      if (!item.votes.length || item.votes.some(v => !v.in_favor)) return false;
+    } else if (club) {
+      const [name, favor] = club.split(':');
+      const vote = item.votes.find(v => v.club === name);
+      if (!vote || String(Number(vote.in_favor)) !== favor) return false;
+    }
+    return true;
+  });
+}
+
+function updateAndRender() {
+  ['filterZeitraum', 'filterClub', 'filterContra', 'filterThema'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.toggle('active', el.value !== '');
+  });
+  renderList(filtered());
+}
+['search', 'filterZeitraum', 'filterClub', 'filterContra', 'filterThema', 'sortBy'].forEach(id =>
+  document.getElementById(id).addEventListener('input', updateAndRender));
+
+function filterByParty(party) {
+  document.getElementById('filterContra').value = party;
+  document.getElementById('sortBy').value = 'date_desc';
+  updateAndRender();
+  document.getElementById('list').scrollTop = 0;
+  if (window.innerWidth <= 800) location.hash = '';
+  toast(`Liste zeigt Widersprüche der ${party}`);
+}
+
+// ── Sorting ───────────────────────────────────────────────
+function controversy(item) {
+  return Math.min(item.votes.filter(v => v.in_favor).length, item.votes.filter(v => !v.in_favor).length);
+}
+// Contested government bills first, routine unanimous committee items last.
+function relevance(item) {
+  const dokW = { 'RV': 8, 'RVS': 8, 'A': 5, 'AA': 3, 'BUA': 2, 'BRA': 1 }[item.doktyp] ?? 2;
+  return dokW + controversy(item) * 5 + item.votes.length;
+}
+function sorted(items) {
+  const by = document.getElementById('sortBy').value;
+  return [...items].sort((a, b) => {
+    if (by === 'relevance_desc')   return relevance(b) - relevance(a);
+    if (by === 'media_desc')       return (b.media_score || 0) - (a.media_score || 0);
+    if (by === 'date_desc')        return parseDatum(b.datum) - parseDatum(a.datum);
+    if (by === 'date_asc')         return parseDatum(a.datum) - parseDatum(b.datum);
+    if (by === 'contra_desc')      return contraParties(b).length - contraParties(a).length
+                                          || parseDatum(b.datum) - parseDatum(a.datum);
+    if (by === 'controversy_desc') return controversy(b) - controversy(a);
+    if (by === 'controversy_asc')  return controversy(a) - controversy(b);
+    return 0;
+  });
+}
+
+// ── List ──────────────────────────────────────────────────
+function voteLine(votes) {
+  if (!votes.length) return '<span class="muted">Keine Abstimmungsdaten</span>';
+  const pro = votes.filter(v => v.in_favor), con = votes.filter(v => !v.in_favor);
+  const chips = vs => vs.map(v => chip(v.club)).join('');
+  if (!con.length) {
+    return `<span class="vote-group"><span class="vote-icon for">✓</span>${chips(pro)}</span>
+            <span class="chip unanimous">einstimmig</span>`;
+  }
+  return `<span class="vote-group" title="Dafür"><span class="vote-icon for">✓</span>${chips(pro) || '<span class="muted">–</span>'}</span>
+          <span class="vote-group" title="Dagegen"><span class="vote-icon against">✗</span>${chips(con)}</span>`;
+}
+
+function contraBadge(item) {
+  const ps = contraParties(item);
+  if (!ps.length) return '';
+  const strong = ps.some(p => item.scores[p] <= -2);
+  return `<div><span class="contra-badge ${strong ? 'strong' : ''}"
+            title="Laut KI-Einschätzung widerspricht die Abstimmung dem Wahlprogramm">
+            ⚠ Widerspruch zum Wahlprogramm: ${ps.map(escHtml).join(', ')}</span></div>`;
+}
+
+function renderList(items) {
+  items = sorted(items);
+  document.getElementById('count').textContent = `${items.length} Beschlüsse`;
+  const list = document.getElementById('list');
+  if (!items.length) { list.innerHTML = '<div class="loading">Keine Treffer.</div>'; return; }
+  const activeId = (location.hash.match(/^#\/beschluss\/(\d+)/) || [])[1];
+  list.innerHTML = items.map(item => `
+    <div class="item-card ${String(item.id) === activeId ? 'active' : ''}" data-id="${item.id}"
+         onclick="location.hash='#/beschluss/${item.id}'">
+      <div class="item-meta">
+        <span class="item-datum">${escHtml(item.datum)}</span>
+        <span class="badge" title="${escHtml(DOKTYP_NAMES[item.doktyp] || item.doktyp)}">${escHtml(item.doktyp)}</span>
+        <span class="item-zitation">${escHtml(item.zitation)}</span>
+      </div>
+      <div class="item-title">${escHtml(item.title)}</div>
+      ${item.teaser ? `<div class="item-teaser">${escHtml(item.teaser)}</div>` : ''}
+      ${contraBadge(item)}
+      <div class="vote-line">${voteLine(item.votes)}</div>
+    </div>`).join('');
+}
+
+// ── Overview (landing) ────────────────────────────────────
+function partyStats() {
+  return PARTIES.map(p => {
+    const counts = { '-2': 0, '-1': 0, '0': 0, '1': 0, '2': 0 };
+    let total = 0;
+    allItems.forEach(it => {
+      const s = it.scores && it.scores[p];
+      if (s !== undefined && s !== null) { counts[String(s)]++; total++; }
+    });
+    const contra = counts['-2'] + counts['-1'];
+    const aligned = counts['1'] + counts['2'];
+    return { party: p, counts, total, contra, aligned };
+  }).sort((a, b) => b.contra - a.contra || a.party.localeCompare(b.party));
+}
+
+function renderOverview() {
+  const stats = partyStats();
+  const cards = stats.map(s => {
+    const bar = ['-2', '-1', '0', '1', '2'].map(k => s.counts[k]
+      ? `<span style="width:${100 * s.counts[k] / s.total}%;background:${SCORE_META[k].color}"
+               title="${SCORE_META[k].label}: ${s.counts[k]}"></span>` : '').join('');
+    const pct = s.total ? Math.round(100 * s.contra / s.total) : 0;
+    return `
+      <button class="party-card" style="--pc:${partyColor(s.party)}" onclick="location.hash='#/partei/${encodeURIComponent(s.party)}'"
+              title="Parteiseite der ${s.party}">
+        <div class="pname">${s.party}</div>
+        <div class="big ${s.contra ? '' : 'zero'}">${s.contra}</div>
+        <div class="lbl">Widersprüche zum Wahlprogramm</div>
+        <div class="distbar">${bar}</div>
+        <div class="sub">${s.total} Abstimmungen bewertet · ${pct} % Widerspruch · ${s.aligned} im Einklang</div>
+      </button>`;
+  }).join('');
+
+  const legend = ['-2', '-1', '0', '1', '2'].map(k =>
+    `<span><i style="background:${SCORE_META[k].color}"></i>${scoreText(+k)} ${SCORE_META[k].label}</span>`).join('');
+
+  const recent = allItems.filter(i => contraParties(i).length)
+    .sort((a, b) => parseDatum(b.datum) - parseDatum(a.datum)).slice(0, 8);
+  const recentHtml = recent.length ? recent.map(it => `
+    <div class="recent-row" onclick="location.hash='#/beschluss/${it.id}'">
+      <div class="recent-date">${escHtml(it.datum)}</div>
+      <div>
+        <div class="recent-title">${escHtml(it.title)}</div>
+        <div class="recent-parties">${contraParties(it).map(p =>
+          `${chip(p)}<span class="analyse-score-badge ${SCORE_META[String(it.scores[p])].cls}">${SCORE_META[String(it.scores[p])].label}</span>`).join(' ')}</div>
+      </div>
+    </div>`).join('') : '<p class="muted">Noch keine Widersprüche gefunden.</p>';
+
+  const analysed = allItems.filter(i => i.analysis_count).length;
+  document.getElementById('detail-content').innerHTML = `
+    <div class="card intro">
+      <h2>Stimmen die Parteien so ab, wie sie es versprochen haben?</h2>
+      <p>Der Parlamentsmonitor zeigt alle Beschlüsse des Nationalrats seit Beginn der XXVIII. Gesetzgebungsperiode
+         und wie ÖVP, SPÖ, FPÖ, GRÜNE und NEOS abgestimmt haben. Für jede Abstimmung prüft eine KI, ob sie zum
+         Wahlprogramm der Partei von 2024 passt – mit dem Originalzitat aus dem Programm und der Begründung,
+         die die Partei selbst im Parlament gegeben hat.</p>
+      <p class="disclaimer muted">Die Bewertungen sind <b>KI-Einschätzungen</b> und können falsch sein.
+         Wie sie entstehen und wo ihre Grenzen liegen, steht unter <a href="#/methodik">Methodik</a>.
+         ${analysed} Beschlüsse bewertet.</p>
+    </div>
+
+    <div class="section-title">Widersprüche zum eigenen Wahlprogramm <span class="ai-label">KI-Einschätzung</span></div>
+    <div class="scoreboard">${cards}</div>
+    <div class="legend">${legend}</div>
+    <p class="muted" style="margin:8px 0 22px">Klick auf eine Partei öffnet ihre Parteiseite.
+       Regierungsparteien stimmen oft Koalitionskompromissen zu – ein Widerspruch ist deshalb nicht automatisch ein Wortbruch.</p>
+
+    <div class="card">
+      <h3>Wer stimmt mit wem?</h3>
+      ${agreementMatrix(allItems)}
+    </div>
+
+    <div class="card">
+      <h3>Nach Thema stöbern</h3>
+      <div class="hw-chips">${topicStats().map(t =>
+        `<a class="hw-chip" href="${topicLink(t.name)}">${escHtml(t.name)} <span>${t.count}</span></a>`).join('')}</div>
+    </div>
+
+    <div class="card">
+      <h3>Neueste Widersprüche</h3>
+      ${recentHtml}
+    </div>`;
+}
+
+// ── Wer stimmt mit wem? ───────────────────────────────────
+// Only contested votes count: unanimous decisions would make every pair look alike.
+function isContested(it) {
+  return it.votes.some(v => v.in_favor) && it.votes.some(v => !v.in_favor);
+}
+
+function agreementStats(items) {
+  const m = {};
+  PARTIES.forEach(a => { m[a] = {}; PARTIES.forEach(b => m[a][b] = { same: 0, total: 0 }); });
+  items.filter(isContested).forEach(it => {
+    const v = Object.fromEntries(it.votes.map(x => [x.club, x.in_favor]));
+    PARTIES.forEach(a => PARTIES.forEach(b => {
+      if (a in v && b in v) { m[a][b].total++; if (v[a] === v[b]) m[a][b].same++; }
+    }));
+  });
+  return m;
+}
+
+function agreementMatrix(items) {
+  const m = agreementStats(items);
+  const contested = items.filter(isContested).length;
+  if (!contested) return '<p class="muted">Alle Beschlüsse in dieser Auswahl waren einstimmig.</p>';
+  const head = PARTIES.map(p => `<th>${chip(p)}</th>`).join('');
+  const rows = PARTIES.map(a => `<tr><th>${chip(a)}</th>${PARTIES.map(b => {
+    if (a === b) return '<td class="am-self">–</td>';
+    const { same, total } = m[a][b];
+    if (!total) return '<td class="am-na">·</td>';
+    const pct = Math.round(100 * same / total);
+    // light → dark blue with agreement
+    const bg = `rgba(59, 91, 219, ${(0.08 + 0.85 * pct / 100).toFixed(2)})`;
+    return `<td style="background:${bg};color:${pct > 55 ? '#fff' : 'var(--ink)'}"
+                title="${a} und ${b} stimmten bei ${same} von ${total} strittigen Abstimmungen gleich">${pct} %</td>`;
+  }).join('')}</tr>`).join('');
+  return `
+    <div class="am-wrap"><table class="am"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="muted" style="margin-top:8px">Anteil der Abstimmungen, bei denen zwei Parteien gleich gestimmt haben –
+      nur strittige Beschlüsse (${contested} von ${items.length}); einstimmige Beschlüsse sind nicht mitgezählt.</p>`;
+}
+
+// ── Party pages ───────────────────────────────────────────
+function renderParty(party) {
+  if (!PARTIES.includes(party)) {
+    document.getElementById('detail-content').innerHTML = '<div class="loading">Partei nicht gefunden.</div>';
+    return;
+  }
+  document.title = `${party} – Parlamentsmonitor`;
+  const voted = allItems.filter(it => it.votes.some(v => v.club === party));
+  const pro = voted.filter(it => it.votes.find(v => v.club === party).in_favor).length;
+  const scored = voted.filter(it => it.scores && it.scores[party] !== undefined);
+  const counts = { '-2': 0, '-1': 0, '0': 0, '1': 0, '2': 0 };
+  scored.forEach(it => counts[String(it.scores[party])]++);
+  const contra = scored.filter(it => it.scores[party] <= -1).sort((a, b) => parseDatum(b.datum) - parseDatum(a.datum));
+  const fulfilled = scored.filter(it => it.scores[party] >= 2).sort((a, b) => parseDatum(b.datum) - parseDatum(a.datum));
+  const voteOf = it => it.votes.find(v => v.club === party).in_favor;
+
+  const bar = ['-2', '-1', '0', '1', '2'].map(k => counts[k]
+    ? `<span style="width:${100 * counts[k] / scored.length}%;background:${SCORE_META[k].color}"
+             title="${SCORE_META[k].label}: ${counts[k]}"></span>` : '').join('');
+
+  // agreement with the other parties (contested votes only)
+  const m = agreementStats(allItems)[party];
+  const partners = PARTIES.filter(p => p !== party && m[p].total)
+    .map(p => ({ p, pct: Math.round(100 * m[p].same / m[p].total), ...m[p] }))
+    .sort((a, b) => b.pct - a.pct);
+  const partnerHtml = partners.map(x => `
+    <div class="partner-row">
+      <a href="#/partei/${encodeURIComponent(x.p)}">${chip(x.p)}</a>
+      <div class="partner-bar"><span style="width:${x.pct}%;background:${partyColor(x.p)}"></span></div>
+      <div class="partner-pct" title="${x.same} von ${x.total} strittigen Abstimmungen">${x.pct} %</div>
+    </div>`).join('');
+
+  // per topic
+  const topicRows = topicStats().map(t => {
+    const its = voted.filter(it => (it.topics || []).includes(t.name));
+    if (!its.length) return '';
+    const yes = its.filter(voteOf).length, no = its.length - yes;
+    const c = its.filter(it => (it.scores || {})[party] <= -1).length;
+    return `<tr>
+      <td><a href="${topicLink(t.name)}">${escHtml(t.name)}</a></td>
+      <td class="vbar-cell"><div class="vbar" title="${yes} dafür, ${no} dagegen">
+        <span class="vbar-pro" style="width:${100 * yes / its.length}%"></span>
+        <span class="vbar-con" style="width:${100 * no / its.length}%"></span></div>
+        <div class="vbar-lbl"><span>${yes} dafür</span><span>${no} dagegen</span></div></td>
+      <td class="num ${c ? 'contra-num' : ''}">${c}</td>
+    </tr>`;
+  }).join('');
+
+  const itemRow = it => {
+    const s = it.scores[party], sm = SCORE_META[String(s)];
+    return `
+      <a class="topic-item" href="#/beschluss/${it.id}">
+        <div class="topic-item-date">${escHtml(it.datum)}</div>
+        <div>
+          <div class="topic-item-title">${escHtml(it.title)}</div>
+          <div class="vote-line">
+            <span class="analyse-vote-dir ${voteOf(it) ? 'ja' : 'nein'}">${voteOf(it) ? 'Dafür' : 'Dagegen'}</span>
+            <span class="analyse-score-badge ${sm.cls}">${scoreText(s)} ${sm.label}</span>
+          </div>
+        </div>
+      </a>`;
+  };
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="party-header" style="--pc:${partyColor(party)}">
+      <div class="party-header-name">${escHtml(party)}</div>
+      <div class="detail-description">${voted.length} Abstimmungen im Nationalrat seit Beginn der XXVIII. GP ·
+        ${pro} dafür, ${voted.length - pro} dagegen</div>
+    </div>
+
+    <div class="card">
+      <h3>Abstimmungen im Vergleich zum Wahlprogramm <span class="ai-label">KI-Einschätzung</span></h3>
+      <div class="kpis">
+        <div class="kpi"><div class="kpi-num contra-num">${contra.length}</div><div class="kpi-lbl">Widersprüche</div></div>
+        <div class="kpi"><div class="kpi-num">${counts['1'] + counts['2']}</div><div class="kpi-lbl">im Einklang</div></div>
+        <div class="kpi"><div class="kpi-num">${fulfilled.length}</div><div class="kpi-lbl">Wahlversprechen umgesetzt</div></div>
+        <div class="kpi"><div class="kpi-num">${counts['0']}</div><div class="kpi-lbl">ohne Bezug zum Programm</div></div>
+      </div>
+      <div class="distbar">${bar}</div>
+      <p style="margin-top:12px"><button class="link-btn" onclick="filterByParty('${party}')">Widersprüche in der Liste anzeigen</button></p>
+    </div>
+
+    <div class="card">
+      <h3>Stimmt am häufigsten mit …</h3>
+      ${partnerHtml || '<p class="muted">Keine strittigen Abstimmungen.</p>'}
+      <p class="muted" style="margin-top:8px">Anteil gleicher Stimmen bei strittigen Beschlüssen.</p>
+    </div>
+
+    <div class="card">
+      <h3>Widersprüche zum Wahlprogramm (${contra.length})</h3>
+      ${contra.map(itemRow).join('') || '<p class="muted">Keine.</p>'}
+    </div>
+
+    <div class="card">
+      <h3>Umgesetzte Wahlversprechen (${fulfilled.length})</h3>
+      ${fulfilled.map(itemRow).join('') || '<p class="muted">Keine.</p>'}
+    </div>
+
+    <div class="card">
+      <h3>Nach Thema</h3>
+      <table class="party-table">
+        <thead><tr><th>Thema</th><th>Abstimmungen</th><th class="num">Widersprüche</th></tr></thead>
+        <tbody>${topicRows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── Impressum ─────────────────────────────────────────────
+function renderImprint() {
+  document.title = 'Impressum – Parlamentsmonitor';
+  const stats = !!document.querySelector('script[data-goatcounter]');
+  document.getElementById('detail-content').innerHTML = `
+    <div class="card prose">
+      <h2>Impressum</h2>
+
+      <h3>Offenlegung gemäß § 25 Mediengesetz</h3>
+      <p><b>Medieninhaber und Herausgeber:</b><br>Christoph Griesbacher<br>Graz, Österreich</p>
+      <p><b>Kontakt:</b> über <a href="${ISSUES_URL}" target="_blank">GitHub Issues</a></p>
+      <p><b>Grundlegende Richtung:</b> Unabhängige, überparteiliche Information über die Beschlüsse des
+         österreichischen Nationalrats, das Abstimmungsverhalten der Parteien und dessen Übereinstimmung mit
+         ihren Wahlprogrammen. Der Parlamentsmonitor ist ein privates Projekt ohne Auftrag oder Finanzierung
+         durch eine Partei oder Organisation.</p>
+
+      <h3>Haftung</h3>
+      <p>Bewertungen, Zusammenfassungen und Begründungen sind automatisch mit KI erstellt und als solche
+         gekennzeichnet. Sie werden mit Sorgfalt erstellt, können aber fehlerhaft sein; für Richtigkeit und
+         Vollständigkeit wird keine Gewähr übernommen. Hinweise auf Fehler sind über die Schaltfläche
+         „Bewertung falsch?“ oder GitHub Issues jederzeit willkommen. Für die Inhalte verlinkter externer
+         Seiten sind ausschließlich deren Betreiber verantwortlich.</p>
+
+      <h3>Quellen und Rechte</h3>
+      <ul>
+        <li>Daten des Parlaments: <a href="${PARL}/recherchieren/open-data" target="_blank">Open Data des
+            österreichischen Parlaments</a>, Lizenz CC BY 4.0.</li>
+        <li>Wahlprogramme zur Nationalratswahl 2024: © die jeweiligen Parteien. Passagen werden wörtlich und mit
+            Quellenangabe zum Zweck der Gegenüberstellung zitiert.</li>
+        <li>Quellcode dieser Website: <a href="https://github.com/griesbchr/parlamentsmonitor" target="_blank">github.com/griesbchr/parlamentsmonitor</a></li>
+      </ul>
+
+      <h3>Datenschutz</h3>
+      <p>Diese Website setzt keine Cookies und speichert keine personenbezogenen Daten.
+         ${stats
+           ? `Zur Zählung der Seitenaufrufe wird <a href="https://www.goatcounter.com" target="_blank">GoatCounter</a>
+              verwendet – ohne Cookies und ohne Speicherung von IP-Adressen oder persönlichen Profilen.`
+           : 'Es werden keine Analyse- oder Trackingdienste verwendet.'}</p>
+      <p>Die Website wird über <b>GitHub Pages</b> (GitHub Inc.) bereitgestellt. Beim Aufruf verarbeitet GitHub
+         technisch notwendige Verbindungsdaten wie die IP-Adresse, um die Seite auszuliefern; siehe die
+         <a href="https://docs.github.com/de/site-policy/privacy-policies/github-general-privacy-statement" target="_blank">Datenschutzerklärung von GitHub</a>.
+         Wer über „Bewertung falsch?“ eine Meldung abgibt, tut dies auf GitHub; dafür gelten die Bedingungen von GitHub.</p>
+    </div>`;
+}
+
+// ── Topics ────────────────────────────────────────────────
+function topicSlug(name) {
+  const t = themen.find(t => t.name === name);
+  return t ? t.slug : encodeURIComponent(name);
+}
+function topicLink(name) { return `#/thema/${topicSlug(name)}`; }
+
+function topicStats() {
+  const map = {};
+  allItems.forEach(it => (it.topics || []).forEach(t => {
+    const s = map[t] || (map[t] = { name: t, count: 0, contra: 0, headwords: {} });
+    s.count++;
+    if (contraParties(it).length) s.contra++;
+    (it.headwords || []).forEach(h => s.headwords[h] = (s.headwords[h] || 0) + 1);
+  }));
+  return Object.values(map).sort((a, b) => b.count - a.count);
+}
+function topHeadwords(stat, n) {
+  return Object.entries(stat.headwords).sort((a, b) => b[1] - a[1]).slice(0, n);
+}
+
+function renderTopics() {
+  document.title = 'Themen – Parlamentsmonitor';
+  const cards = topicStats().map(t => `
+    <a class="topic-card" href="${topicLink(t.name)}">
+      <div class="topic-name">${escHtml(t.name)}</div>
+      <div class="topic-count">${t.count} Beschlüsse${t.contra
+        ? ` · <span class="topic-contra">${t.contra} mit Widerspruch</span>` : ''}</div>
+      <div class="topic-hw">${topHeadwords(t, 3).map(([h]) => escHtml(h)).join(' · ')}</div>
+    </a>`).join('');
+  document.getElementById('detail-content').innerHTML = `
+    <div class="card intro">
+      <h2>Themen</h2>
+      <p>Alle Beschlüsse nach den Themenbereichen des Parlaments. Zu jedem Thema: wie die Parteien
+         abgestimmt haben, wo sie laut KI-Einschätzung ihrem Wahlprogramm widersprechen – und was sie
+         in ihren Wahlprogrammen dazu versprochen haben.</p>
+    </div>
+    <div class="topic-grid">${cards}</div>`;
+}
+
+let topicHeadword = '';
+
+function renderTopic(slug) {
+  const meta = themen.find(t => t.slug === slug);
+  const name = meta ? meta.name : slug;
+  const items = allItems.filter(it => (it.topics || []).includes(name))
+    .sort((a, b) => parseDatum(b.datum) - parseDatum(a.datum));
+  if (!items.length) {
+    document.getElementById('detail-content').innerHTML = '<div class="loading">Thema nicht gefunden.</div>';
+    return;
+  }
+  document.title = `${name} – Parlamentsmonitor`;
+  topicHeadword = '';
+
+  // keep the list on the left in sync with the topic
+  document.getElementById('filterThema').value = name;
+  updateAndRender();
+
+  // how each party voted on this topic
+  const rows = PARTIES.map(p => {
+    let pro = 0, con = 0, contra = 0, aligned = 0;
+    items.forEach(it => {
+      const v = it.votes.find(v => v.club === p);
+      if (v) v.in_favor ? pro++ : con++;
+      const s = it.scores && it.scores[p];
+      if (s !== undefined && s <= -1) contra++;
+      if (s !== undefined && s >= 1) aligned++;
+    });
+    const total = pro + con || 1;
+    return `
+      <tr>
+        <td>${chip(p)}</td>
+        <td class="vbar-cell">
+          <div class="vbar" title="${pro} dafür, ${con} dagegen">
+            <span class="vbar-pro" style="width:${100 * pro / total}%"></span>
+            <span class="vbar-con" style="width:${100 * con / total}%"></span>
+          </div>
+          <div class="vbar-lbl"><span>${pro} dafür</span><span>${con} dagegen</span></div>
+        </td>
+        <td class="num ${contra ? 'contra-num' : ''}">${contra}</td>
+        <td class="num">${aligned}</td>
+      </tr>`;
+  }).join('');
+
+  const stat = topicStats().find(t => t.name === name);
+  const chips = topHeadwords(stat, 14).map(([h, n]) =>
+    `<button class="hw-chip" data-hw="${escHtml(h)}">${escHtml(h)} <span>${n}</span></button>`).join('');
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-header">
+      <div class="detail-meta"><a href="#/themen">← Alle Themen</a></div>
+      <div class="detail-title">${escHtml(name)}</div>
+      <div class="detail-description">${items.length} Beschlüsse seit Beginn der XXVIII. GP ·
+        ${items.filter(i => contraParties(i).length).length} davon mit Widerspruch zum Wahlprogramm</div>
+    </div>
+
+    <div class="card">
+      <h3>So haben die Parteien abgestimmt</h3>
+      <table class="party-table">
+        <thead><tr><th></th><th>Abstimmungen</th>
+          <th class="num" title="KI-Einschätzung">Widerspruch <span class="ai-label">KI</span></th>
+          <th class="num" title="KI-Einschätzung">Im Einklang <span class="ai-label">KI</span></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Wer stimmt mit wem? – ${escHtml(name)}</h3>
+      ${agreementMatrix(items)}
+    </div>
+
+    <div class="card">
+      <h3>Was die Parteien versprochen haben</h3>
+      <div id="topic-manifesto"><div class="muted">Lade Wahlprogramme…</div></div>
+    </div>
+
+    <div class="card">
+      <h3>Beschlüsse</h3>
+      <div class="hw-chips">${chips}</div>
+      <div id="topic-items"></div>
+    </div>`;
+
+  document.querySelectorAll('.hw-chip').forEach(b => b.addEventListener('click', () => {
+    topicHeadword = topicHeadword === b.dataset.hw ? '' : b.dataset.hw;
+    document.querySelectorAll('.hw-chip').forEach(x => x.classList.toggle('active', x.dataset.hw === topicHeadword));
+    renderTopicItems(items);
+  }));
+  renderTopicItems(items);
+
+  fetch(API.thema(slug)).then(r => r.json()).then(d => {
+    if (location.hash !== `#/thema/${slug}`) return;
+    document.getElementById('topic-manifesto').innerHTML = renderTopicManifesto(d);
+  }).catch(() => {
+    document.getElementById('topic-manifesto').innerHTML = '<div class="muted">Konnte nicht geladen werden.</div>';
+  });
+}
+
+function renderTopicItems(items) {
+  const shown = topicHeadword ? items.filter(i => (i.headwords || []).includes(topicHeadword)) : items;
+  document.getElementById('topic-items').innerHTML = shown.map(it => {
+    const cp = contraParties(it);
+    return `
+      <a class="topic-item" href="#/beschluss/${it.id}">
+        <div class="topic-item-date">${escHtml(it.datum)}</div>
+        <div>
+          <div class="topic-item-title">${escHtml(it.title)}</div>
+          ${it.teaser ? `<div class="item-teaser">${escHtml(it.teaser)}</div>` : ''}
+          <div class="vote-line">${voteLine(it.votes)}
+            ${cp.length ? `<span class="contra-badge ${cp.some(p => it.scores[p] <= -2) ? 'strong' : ''}" style="margin:0">⚠ ${cp.map(escHtml).join(', ')}</span>` : ''}</div>
+        </div>
+      </a>`;
+  }).join('') || '<p class="muted">Keine Beschlüsse.</p>';
+}
+
+function renderTopicManifesto(d) {
+  if (!d.areas || !d.areas.length) {
+    return '<p class="muted">Für dieses Thema gibt es keine Zuordnung zu den Wahlprogrammen.</p>';
+  }
+  const parties = PARTIES.filter(p => (d.sections[p] || []).length);
+  if (!parties.length) return '<p class="muted">Keine passenden Abschnitte gefunden.</p>';
+  const tabs = parties.map((p, i) =>
+    `<button class="party-tab ${i === 0 ? 'active' : ''}" data-party="${p}"
+             style="--pc:${partyColor(p)}">${p} <span>${d.sections[p].length}</span></button>`).join('');
+  const panels = parties.map((p, i) => `
+    <div class="party-panel" data-party="${p}" ${i === 0 ? '' : 'hidden'}>
+      ${d.sections[p].map(s => `
+        <details class="mf-section">
+          <summary>${escHtml(s.path)}</summary>
+          <div class="quote">${escHtml(s.text)}</div>
+        </details>`).join('')}
+    </div>`).join('');
+  setTimeout(() => document.querySelectorAll('.party-tab').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.party-tab').forEach(x => x.classList.toggle('active', x === b));
+    document.querySelectorAll('.party-panel').forEach(x => x.hidden = x.dataset.party !== b.dataset.party);
+  })));
+  return `
+    <p class="muted" style="margin-bottom:10px">Abschnitte aus den Wahlprogrammen 2024 zu
+      ${d.areas.map(escHtml).join(', ')} – wörtlich zitiert, automatisch zugeordnet.</p>
+    <div class="party-tabs">${tabs}</div>
+    ${panels}`;
+}
+
+// ── Methodik ──────────────────────────────────────────────
+function renderMethod() {
+  document.title = 'Methodik – Parlamentsmonitor';
+  const scale = ['-2', '-1', '0', '1', '2'].map(k =>
+    `<tr><td><span class="analyse-score-badge ${SCORE_META[k].cls}">${scoreText(+k)} ${SCORE_META[k].label}</span></td><td>${{
+      '-2': 'Die Partei stimmte gegen eine ausdrückliche Aussage ihres Wahlprogramms.',
+      '-1': 'Die Abstimmung weicht von der Richtung des Wahlprogramms ab.',
+      '0':  'Das Thema kommt im Wahlprogramm nicht (erkennbar) vor.',
+      '1':  'Die Abstimmung passt zur allgemeinen Richtung des Wahlprogramms.',
+      '2':  'Die Partei stimmte für die Umsetzung eines konkreten Wahlversprechens.',
+    }[k]}</td></tr>`).join('');
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="card prose">
+      <h2>Methodik</h2>
+      <p>Der Parlamentsmonitor ist ein unabhängiges, privates Projekt. Er steht in keiner Verbindung zum
+         Parlament oder zu einer Partei.</p>
+
+      <h3>Datenquellen</h3>
+      <ul>
+        <li><b>Beschlüsse, Abstimmungsergebnisse und Dokumente</b>: offene Daten des österreichischen Parlaments
+            (<a href="${PARL}" target="_blank">parlament.gv.at</a>). Abgestimmt wird nach Klubs, nicht nach einzelnen Abgeordneten.</li>
+        <li><b>Begründungen der Parteien</b>: die Berichte der Parlamentskorrespondenz zu Ausschuss- und Plenarsitzungen.
+            Es sind Zusammenfassungen der Debatte, keine wörtlichen Reden.</li>
+        <li><b>Wahlprogramme</b>: die Programme von ÖVP, SPÖ, FPÖ, GRÜNEN und NEOS zur Nationalratswahl 2024.
+            Zitate werden wörtlich angezeigt.</li>
+      </ul>
+
+      <h3>So entsteht eine Bewertung</h3>
+      <ol>
+        <li>Die Wahlprogramme werden in rund 1.000 Abschnitte zerlegt und Themenbereichen zugeordnet.</li>
+        <li>Für jede Abstimmung und Partei werden die drei inhaltlich ähnlichsten Abschnitte des Programms gesucht (semantische Suche mit einem lokal laufenden Sprachmodell, das Bedeutungen statt einzelner Wörter vergleicht).</li>
+        <li>Eine KI (Claude von Anthropic) erhält: Titel des Beschlusses, einen Auszug aus den Erläuterungen bzw. dem Gesetzestext,
+            das Abstimmungsverhalten der Partei, ihre Begründung laut Parlamentskorrespondenz und die Programm-Abschnitte.</li>
+        <li>Sie vergibt eine Bewertung von −2 bis +2, wählt den passendsten Abschnitt und begründet ihre Einschätzung in ein bis zwei Sätzen. Ein Widerspruch setzt voraus, dass sich das Programm konkret zum Gegenstand der Abstimmung äußert – allgemeine Ziele reichen nicht.</li>
+        <li>Jede Abstimmung, die dabei als Widerspruch eingestuft wird, bewertet die KI ein zweites Mal ausführlicher. Angezeigt wird das Ergebnis dieser zweiten Bewertung. Beide Schritte sind automatisch; eine Kontrolle durch Menschen findet nicht statt.</li>
+      </ol>
+      <table>${scale}</table>
+
+      <h3>Grenzen</h3>
+      <ul>
+        <li>Die KI kann Gesetze, Programme oder Begründungen falsch verstehen. Jede Bewertung ist eine Einschätzung, kein Urteil.</li>
+        <li>Die Suche kann relevante Stellen im Wahlprogramm übersehen – dann fällt die Bewertung oft auf „Kein Bezug“.</li>
+        <li>Regierungsparteien stimmen Koalitionskompromissen zu, die vom eigenen Programm abweichen können.
+            Oppositionsparteien lehnen Gesetze manchmal wegen Details ab, obwohl sie das Ziel teilen.</li>
+        <li>Nicht jeder Beschluss wird in der Parlamentskorrespondenz ausführlich behandelt; dann fehlt die Begründung der Partei.</li>
+        <li>Die Themen der Beschlüsse stammen vom Parlament. Die Zuordnung der Wahlprogramm-Abschnitte zu Themen
+            erfolgt dagegen automatisch per Stichwortsuche und ist nicht immer treffend.</li>
+        <li>Kurzinformationen ohne offizielle Zusammenfassung des Parlaments sind KI-generiert und entsprechend gekennzeichnet.</li>
+      </ul>
+
+      <h3>Aktualisierung</h3>
+      <p>Die Daten werden wöchentlich aktualisiert. Der Stand steht oben rechts.</p>
+
+      <h3>Fehler gefunden?</h3>
+      <p>Hinweise auf falsche Bewertungen oder Daten bitte als
+         <a href="${ISSUES_URL}" target="_blank">Issue auf GitHub</a> melden.</p>
+    </div>`;
+}
+
+// ── Detail ────────────────────────────────────────────────
+function loadDetail(id) {
+  document.getElementById('detail-content').innerHTML = '<div class="loading">Lade…</div>';
+  const load = STATIC
+    ? fetch(`data/items/${id}.json`).then(r => { if (!r.ok) throw new Error(); return r.json(); }).then(d => [d.item, d.analyses])
+    : Promise.all([
+        fetch(`/api/items/${id}`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+        fetch(`/api/items/${id}/analyses`).then(r => r.json()),
+      ]);
+  load.then(([item, analyses]) => {
+    if (location.hash !== `#/beschluss/${id}`) return;   // user navigated away meanwhile
+    renderDetail(item, analyses);
+  }).catch(() => {
+    document.getElementById('detail-content').innerHTML = '<div class="loading">Beschluss nicht gefunden.</div>';
+  });
+}
+
+function analysisBody(a) {
+  const who = (a.speakers || []).length ? ` · ${a.speakers.map(escHtml).join(', ')}` : '';
+  const sources = (a.sources || []).map(s =>
+    `<a href="${PARL}${escHtml(s.url)}" target="_blank" title="${escHtml(s.title)}">↗ Parlamentskorrespondenz ${escHtml(s.date)}</a>`).join('');
+  const said = a.statement
+    ? `<div class="statement">${escHtml(a.statement)}</div>${sources ? `<div class="sources">${sources}</div>` : ''}`
+    : '<div class="muted">Keine Begründung in der Parlamentskorrespondenz gefunden.</div>';
+  const quote = a.section_text
+    ? `<div class="quote">${escHtml(a.section_text)}</div>`
+    : '<div class="muted">Kein passender Abschnitt im Wahlprogramm gefunden.</div>';
+  const sm = SCORE_META[String(a.score)] || SCORE_META['0'];
+  return `
+    <div class="block"><div class="block-label">Was die Partei sagt <span class="who">${who}</span></div>${said}</div>
+    <div class="block"><div class="block-label">Was im Wahlprogramm steht
+      <span class="who">${a.section_path ? '· ' + escHtml(a.section_path) : ''}</span></div>${quote}</div>
+    <div class="block"><div class="block-label">KI-Einschätzung: ${scoreText(a.score)} ${sm.label}</div>
+      <div class="assessment">${escHtml(a.explanation)}</div>
+      <div class="report-row">
+        <a class="report-btn" href="${reportUrl(a)}" target="_blank" rel="noopener"
+           title="Öffnet ein vorausgefülltes Formular auf GitHub (GitHub-Konto nötig)">⚑ Bewertung falsch?</a>
+      </div></div>`;
+}
+
+// Pre-filled GitHub issue for reporting a wrong assessment
+function reportUrl(a) {
+  const it = currentItem || {};
+  const sm = SCORE_META[String(a.score)] || SCORE_META['0'];
+  const vote = a.party_vote === 'JA' ? 'dafür' : a.party_vote === 'NEIN' ? 'dagegen' : 'Enthaltung';
+  const link = `${location.origin}${location.pathname}#/beschluss/${it.id}`;
+  const title = `Bewertung falsch: ${a.party} – ${it.title || ''}`.slice(0, 200);
+  const body = [
+    `**Beschluss:** ${it.title || ''} (${it.zitation || ''}, ${it.datum || ''})`,
+    `**Link:** ${link}`,
+    `**Partei:** ${a.party} – stimmte ${vote}`,
+    `**KI-Bewertung:** ${scoreText(a.score)} ${sm.label}`,
+    `**KI-Begründung:** ${a.explanation || ''}`,
+    '',
+    '**Was ist an der Bewertung falsch, und wie wäre sie richtig?**',
+    '',
+    '',
+  ].join('\n');
+  return `${ISSUES_URL}/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+}
+
+function analysisRow(a, i, expanded) {
+  const sm = SCORE_META[String(a.score)] || SCORE_META['0'];
+  const vdir = a.party_vote === 'JA' ? 'ja' : a.party_vote === 'NEIN' ? 'nein' : 'enth';
+  const vLabel = a.party_vote === 'JA' ? 'Dafür' : a.party_vote === 'NEIN' ? 'Dagegen' : 'Enthaltung';
+  return `
+    <div class="analyse-row ${a.score <= -1 ? 'contra' : ''} ${expanded ? 'expanded' : ''}" id="arow-${i}">
+      <div class="analyse-row-header" onclick="document.getElementById('arow-${i}').classList.toggle('expanded')">
+        <span class="analyse-party-badge" style="background:${partyColor(a.party)}">${escHtml(a.party)}</span>
+        <span class="analyse-vote-dir ${vdir}">${vLabel}</span>
+        <span class="analyse-score-badge ${sm.cls}">${scoreText(a.score)} ${sm.label}</span>
+        <span class="analyse-hint">${a.statement ? 'Begründung · ' : ''}Wahlprogramm · Einschätzung</span>
+        <svg class="analyse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="analyse-row-body">${analysisBody(a)}</div>
+    </div>`;
+}
+
+function renderAnalyses(analyses) {
+  if (!analyses || !analyses.length) {
+    return `<div class="card"><h3>Passt das zum Wahlprogramm?</h3>
+              <p class="muted">Für diesen Beschluss liegt noch keine Bewertung vor.</p></div>`;
+  }
+  const sortedA = [...analyses].sort((a, b) => a.score - b.score);
+  const contra = sortedA.filter(a => a.score <= -1);
+  const rest   = sortedA.filter(a => a.score > -1).sort((a, b) => b.score - a.score);
+
+  const contraHtml = contra.map((a, i) => analysisRow(a, i, true)).join('');
+  const restRows = rest.map((a, i) => analysisRow(a, contra.length + i, false)).join('');
+  const restSummary = rest.map(a => {
+    const sm = SCORE_META[String(a.score)];
+    return `${chip(a.party)}<span class="analyse-score-badge ${sm.cls}">${scoreText(a.score)}</span>`;
+  }).join(' ');
+  const restHtml = !rest.length ? '' : contra.length
+    ? `<details class="consistent-group">
+         <summary>Kein Widerspruch bei: ${restSummary} <span class="more">Details anzeigen</span></summary>
+         ${restRows}
+       </details>`
+    : restRows;
+
+  return `
+    <div class="card">
+      <h3>Passt das zum Wahlprogramm? <span class="ai-label">KI-Einschätzung</span></h3>
+      <details class="scale-info">
+        <summary>Wie wird bewertet?</summary>
+        <table>${['-2','-1','0','1','2'].map(k =>
+          `<tr><td><span class="analyse-score-badge ${SCORE_META[k].cls}">${scoreText(+k)} ${SCORE_META[k].label}</span></td></tr>`).join('')}</table>
+        <p style="margin-top:6px">Eine KI vergleicht die Abstimmung mit dem Wahlprogramm 2024 und der Begründung der Partei.
+           Sie kann sich irren – mehr unter <a href="#/methodik">Methodik</a>.</p>
+      </details>
+      ${contra.length ? '' : '<p class="muted" style="margin-bottom:10px">Keine Partei hat hier laut KI-Einschätzung gegen ihr Wahlprogramm gestimmt.</p>'}
+      ${contraHtml}
+      ${restHtml}
+    </div>`;
+}
+
+function renderDetail(item, analyses) {
+  currentDocs = item.documents || [];
+  currentItem = item;
+  document.title = `${item.title} – Parlamentsmonitor`;
+
+  const pro = item.votes.filter(v => v.in_favor), con = item.votes.filter(v => !v.in_favor);
+  const badge = v => `<span class="vote-badge" style="background:${v.color}"
+                         title="${v.seats ? v.seats + ' Sitze' : ''}">${escHtml(v.club)}</span>`;
+  const votesHtml = item.votes.length ? `
+    <div class="vote-rows">
+      <div class="vote-row"><span class="vlabel for">✓ Dafür</span>${pro.map(badge).join('') || '<span class="muted">–</span>'}</div>
+      <div class="vote-row"><span class="vlabel against">✗ Dagegen</span>${con.map(badge).join('') || '<span class="muted">–</span>'}</div>
+    </div>` : '<p class="muted">Keine Abstimmungsdaten.</p>';
+
+  const shortinfoBody = (item.shortinfo || '').replace(/^Kurzinformation\s*/i, '').trim();
+  const shortinfoHtml = shortinfoBody ? `
+    <div class="card">
+      <h3>Worum geht es? ${item.shortinfo_llm ? '<span class="ai-label" title="Keine offizielle Kurzinformation vorhanden – automatisch zusammengefasst">KI-Zusammenfassung</span>' : ''}</h3>
+      <div class="shortinfo">${shortinfoBody}</div>
+    </div>` : '';
+
+  const tags = item.tags || {};
+  const tagHtml = [
+    ...(tags.topic    ? tags.topic.split(', ').map(t => `<a class="tag topic" href="${topicLink(t)}" title="Alle Beschlüsse zum Thema">${escHtml(t)} →</a>`) : []),
+    ...(tags.headword ? tags.headword.split(', ').map(t => `<span class="tag headword">${escHtml(t)}</span>`) : []),
+    ...(tags.eurovoc  ? tags.eurovoc.split(', ').map(t => `<span class="tag">${escHtml(t)}</span>`) : []),
+  ].join('');
+
+  let docsHtml = '';
+  if (currentDocs.length && STATIC) {
+    docsHtml = `<div class="card"><h3>Dokumente</h3><div class="doc-links">
+      ${currentDocs.map(d => `<a href="${PARL}${escHtml(d.url)}" target="_blank">↗ ${escHtml(d.title || 'Dokument')}</a>`).join('')}
+    </div></div>`;
+  } else if (currentDocs.length) {
+    docsHtml = `<div class="card"><h3>Dokumente</h3>
+      <div class="doc-tab-bar">${currentDocs.map((d, i) =>
+        `<div class="doc-tab ${i === 0 ? 'active' : ''}" onclick="showDoc(${i}, this)">${escHtml(d.title)}</div>`).join('')}</div>
+      <iframe class="doc-frame" id="doc-frame" src="${currentDocs[0].has_html ? '/doc/' + currentDocs[0].id : ''}"
+              sandbox="allow-same-origin allow-scripts"></iframe></div>`;
+  }
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-header">
+      <div class="detail-meta">
+        <span>${escHtml(item.datum)}</span>
+        <span class="detail-zitation">${escHtml(item.zitation)}</span>
+        <span class="badge">${escHtml(DOKTYP_NAMES[item.doktyp] || item.doktyp)}</span>
+        <a class="link-btn" href="${PARL}${escHtml(item.his_url)}" target="_blank">↗ parlament.gv.at</a>
+        <button class="link-btn" onclick="copyLink()">🔗 Link kopieren</button>
+      </div>
+      <div class="detail-title">${escHtml(item.title)}</div>
+      ${item.description ? `<div class="detail-description">${escHtml(item.description)}</div>` : ''}
+    </div>
+
+    ${shortinfoHtml}
+
+    <div class="card"><h3>Abstimmung im Nationalrat</h3>${votesHtml}</div>
+
+    ${renderAnalyses(analyses)}
+
+    ${tagHtml ? `<div class="card"><h3>Schlagworte</h3><div class="tags-section">${tagHtml}</div></div>` : ''}
+
+    ${docsHtml}`;
+}
+
+function showDoc(idx, el) {
+  document.querySelectorAll('.doc-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const doc = currentDocs[idx];
+  document.getElementById('doc-frame').src = doc.has_html ? `/doc/${doc.id}` : '';
+}
+
+function copyLink() {
+  navigator.clipboard.writeText(location.href)
+    .then(() => toast('Link kopiert'))
+    .catch(() => toast(location.href));
+}
+{% endraw %}</script>
+</body>
+</html>
