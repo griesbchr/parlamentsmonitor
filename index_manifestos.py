@@ -121,6 +121,8 @@ POLICY_AREAS: dict[str, list[str]] = {
 def detect_policy_area(heading: str, body: str) -> str:
     """Score each policy area by keyword hits in heading + first 600 chars of body."""
     combined = (heading + " " + body[:600]).lower()
+    # "Sozialdemokratie" would otherwise count for both Soziales and Demokratie
+    combined = re.sub(r'sozialdemokrat\w*', ' ', combined)
     scores: dict[str, int] = {}
     for area, keywords in POLICY_AREAS.items():
         score = sum(combined.count(kw) for kw in keywords)
