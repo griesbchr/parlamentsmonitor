@@ -221,6 +221,8 @@ def _prepare_retrieval(conn) -> None:
     added = embeddings.ensure_section_embeddings(conn)
     if added:
         log.info(f"Embedded {added} new manifesto sections")
+    if added or not conn.execute("SELECT 1 FROM section_topics LIMIT 1").fetchone():
+        embeddings.assign_topics(conn)
 
 
 def find_sections_keyword(conn, party: str, title: str, description: str,

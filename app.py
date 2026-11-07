@@ -263,7 +263,20 @@ def api_topic(slug):
         return jsonify({"error": "not found"}), 404
     areas = TOPIC_AREAS.get(name, [])
     sections: dict[str, list[dict]] = {}
-    if areas:
+    # embedding-based assignment (embeddings.assign_topics); keyword areas only as fallback
+    has_topics = conn.execute(
+        "SELECT name FROM sqlite_master WHERE name='section_topics'").fetchone() and \
+        conn.execute("SELECT 1 FROM section_topics LIMIT 1").fetchone()
+    if has_topics:
+        rows = conn.execute(
+            "SELECT s.party, s.section_path, s.text FROM manifesto_sections s "
+            "JOIN section_topics t ON t.section_id = s.id WHERE t.topic = ? ORDER BY s.id",
+            (name,),
+        ).fetchall()
+        for r in rows:
+            sections.setdefault(r["party"], []).append(
+                {"path": r["section_path"], "text": r["text"]})
+    elif areas:
         rows = conn.execute(
             f"SELECT party, section_path, text FROM manifesto_sections "
             f"WHERE policy_area IN ({','.join('?' * len(areas))}) ORDER BY id",

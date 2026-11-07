@@ -108,6 +108,14 @@ CREATE TABLE IF NOT EXISTS section_embeddings (
     vector      BLOB NOT NULL
 );
 
+-- Topic(s) of each manifesto section, from embeddings.assign_topics()
+CREATE TABLE IF NOT EXISTS section_topics (
+    section_id  INTEGER NOT NULL REFERENCES manifesto_sections(id) ON DELETE CASCADE,
+    topic       TEXT NOT NULL,
+    score       REAL,
+    PRIMARY KEY (section_id, topic)
+);
+
 -- Parlamentskorrespondenz articles linked to an item (only the section about that item)
 CREATE TABLE IF NOT EXISTS pk_articles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -1344,9 +1344,6 @@ function renderTopicItems(items) {
 }
 
 function renderTopicManifesto(d) {
-  if (!d.areas || !d.areas.length) {
-    return '<p class="muted">Für dieses Thema gibt es keine Zuordnung zu den Wahlprogrammen.</p>';
-  }
   const parties = PARTIES.filter(p => (d.sections[p] || []).length);
   if (!parties.length) return '<p class="muted">Keine passenden Abschnitte gefunden.</p>';
   const tabs = parties.map((p, i) =>
@@ -1365,8 +1362,8 @@ function renderTopicManifesto(d) {
     document.querySelectorAll('.party-panel').forEach(x => x.hidden = x.dataset.party !== b.dataset.party);
   })));
   return `
-    <p class="muted" style="margin-bottom:10px">Abschnitte aus den Wahlprogrammen 2024 zu
-      ${d.areas.map(escHtml).join(', ')} – wörtlich zitiert, automatisch zugeordnet.</p>
+    <p class="muted" style="margin-bottom:10px">Abschnitte aus den Wahlprogrammen 2024 zum Thema
+      ${escHtml(d.name)} – wörtlich zitiert, automatisch zugeordnet.</p>
     <div class="party-tabs">${tabs}</div>
     ${panels}`;
 }
@@ -1418,7 +1415,8 @@ function renderMethod() {
             Oppositionsparteien lehnen Gesetze manchmal wegen Details ab, obwohl sie das Ziel teilen.</li>
         <li>Nicht jeder Beschluss wird in der Parlamentskorrespondenz ausführlich behandelt; dann fehlt die Begründung der Partei.</li>
         <li>Die Themen der Beschlüsse stammen vom Parlament. Die Zuordnung der Wahlprogramm-Abschnitte zu Themen
-            erfolgt dagegen automatisch per Stichwortsuche und ist nicht immer treffend.</li>
+            erfolgt dagegen automatisch über die inhaltliche Ähnlichkeit (Embeddings) zu kurzen Themenbeschreibungen
+            und ist nicht immer treffend. Sehr allgemeine Abschnitte, etwa Einleitungen, werden keinem Thema zugeordnet.</li>
         <li>Kurzinformationen ohne offizielle Zusammenfassung des Parlaments sind KI-generiert und entsprechend gekennzeichnet.</li>
       </ul>
 
