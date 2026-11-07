@@ -167,8 +167,27 @@ def git(*args, check=True):
     return subprocess.run(["git", *args], cwd=OUT, capture_output=True, text=True, check=check)
 
 
+def analyses_complete(min_share: float = 0.9) -> bool:
+    """
+    False while a re-score is running (--reset clears vote_analyses until the
+    batch results arrive): never publish a site without its assessments.
+    """
+    import database as db
+    conn = db.connect()
+    expected = conn.execute(
+        "SELECT COUNT(*) FROM votes WHERE club_code IN ('V','S','F','G','N')").fetchone()[0]
+    have = conn.execute("SELECT COUNT(*) FROM vote_analyses").fetchone()[0]
+    conn.close()
+    if expected and have < expected * min_share:
+        print(f"Only {have} of {expected} votes are assessed (re-score running?) – not pushing.")
+        return False
+    return True
+
+
 def push() -> None:
     """Commit and push ./site, if it is a git repo with a remote."""
+    if not analyses_complete():
+        sys.exit(1)
     if not (OUT / ".git").exists():
         print("site/ is not a git repository yet – skipping push.")
         return
