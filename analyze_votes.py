@@ -59,6 +59,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 MODEL = "claude-haiku-5-5"
+VERIFY_MODEL = "claude-sonnet-5-5"   # second, more careful check of contradictions
 
 # File where the active batch ID is saved so --resume can pick it up automatically
 BATCH_ID_FILE = Path(__file__).parent / "vote_analysis_batch.json"
@@ -763,20 +764,8 @@ def _poll_and_store(client: anthropic.Anthropic,
     sections_cache / vote_dir_cache may be None when resuming a batch from a
     previous process. In that case we re-derive sections from the DB live.
     """
-    POLL_INTERVAL = 60  # seconds between status checks
-
-    log.info(f"Polling batch {batch_id} every {POLL_INTERVAL}s…")
-    while True:
-        batch = client.messages.batches.retrieve(batch_id)
-        counts = batch.request_counts
-        log.info(f"  status={batch.processing_status}  "
-                 f"processing={counts.processing}  "
-                 f"succeeded={counts.succeeded}  "
-                 f"errored={counts.errored}  "
-                 f"expired={counts.expired}")
-        if batch.processing_status == "ended":
-            break
-        time.sleep(POLL_INTERVAL)
+    log.info(f"Polling batch {batch_id} every 60s…")
+    _wait_for_batch(client, batch_id)
 
     log.info("Batch complete. Processing results…")
 
@@ -869,7 +858,7 @@ def _poll_and_store(client: anthropic.Anthropic,
 
 # ── Double-check of contradictions ────────────────────────────────────────────
 # Single assessments are noisy. Every contradiction (score ≤ -1) is assessed a
-# second time with thinking enabled; that more careful answer is stored. If it
+# second time by a stronger model (VERIFY_MODEL) with thinking enabled; that more careful answer is stored. If it
 # still finds a contradiction, the row is marked checked=1 ("doppelt geprüft"),
 # otherwise checked=0 and the contradiction disappears.
 
@@ -888,26 +877,40 @@ def _build_for(conn, item_id: int, party: str) -> tuple[str, list[dict], str]:
     return prompt, sections, vote_dir
 
 
+def _wait_for_batch(client: anthropic.Anthropic, batch_id: str) -> None:
+    """Poll until the batch has ended. A timeout per request keeps a dropped
+    connection (e.g. after the computer slept) from hanging the loop forever."""
+    poll = client.with_options(timeout=60, max_retries=5)
+    while True:
+        try:
+            b = poll.messages.batches.retrieve(batch_id)
+            log.info(f"  {batch_id}: {b.processing_status}  {b.request_counts}")
+            if b.processing_status == "ended":
+                return
+        except anthropic.APIError as e:
+            log.warning(f"  poll failed ({e}); retrying")
+        time.sleep(60)
+
+
 def verify_contradictions(client: anthropic.Anthropic, conn) -> None:
     rows = conn.execute(
         "SELECT item_id, party FROM vote_analyses WHERE score <= -1 AND checked IS NULL"
     ).fetchall()
     if not rows:
         return
-    log.info(f"Double-checking {len(rows)} contradictions with thinking enabled …")
+    log.info(f"Double-checking {len(rows)} contradictions with {VERIFY_MODEL} (thinking enabled) …")
     built, reqs = {}, []
     for r in rows:
         prompt, sections, vote_dir = _build_for(conn, r["item_id"], r["party"])
         cid = "chk_" + _encode_custom_id(r["item_id"], r["party"])[len("vote_"):]
         built[cid] = (r["item_id"], r["party"], sections, vote_dir)
         reqs.append(Request(custom_id=cid, params=MessageCreateParamsNonStreaming(
-            model=MODEL, max_tokens=6000,        # room for thinking + answer
+            model=VERIFY_MODEL, max_tokens=8000,   # room for thinking + answer
             messages=[{"role": "user", "content": prompt}],
         )))
     batch = client.messages.batches.create(requests=reqs)
     log.info(f"Verification batch submitted: {batch.id}")
-    while client.messages.batches.retrieve(batch.id).processing_status != "ended":
-        time.sleep(60)
+    _wait_for_batch(client, batch.id)
 
     confirmed = rejected = failed = 0
     for res in client.messages.batches.results(batch.id):
@@ -946,12 +949,19 @@ if __name__ == "__main__":
     p.add_argument("--resume", nargs="?", const=True, metavar="BATCH_ID",
                    help="Poll + store results of a previous batch "
                         "(pass BATCH_ID or omit to load from saved file)")
+    p.add_argument("--verify", action="store_true",
+                   help="Only double-check contradictions that are not checked yet")
     p.add_argument("--retrieval", choices=["embedding", "keyword"], default=RETRIEVAL,
                    help="How manifesto passages are found (default: embedding)")
     args = p.parse_args()
     RETRIEVAL = args.retrieval
 
-    if args.resume:
+    if args.verify:
+        _conn = db.connect()
+        _prepare_retrieval(_conn)
+        verify_contradictions(anthropic.Anthropic(), _conn)
+        print_summary(_conn)
+    elif args.resume:
         # --resume [BATCH_ID]
         batch_id_arg = args.resume if isinstance(args.resume, str) else None
         resume_batch(batch_id_arg)
