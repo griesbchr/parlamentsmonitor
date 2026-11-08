@@ -5,7 +5,7 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://griesbchr.github.io/parlamentsmonitor/">
   <meta property="og:title" content="Parlamentsmonitor">
-  <meta property="og:description" content="282 Beschlüsse des Nationalrats mit KI-Abgleich zum Wahlprogramm. Widersprüche: FPÖ 22, NEOS 7, GRÜNE 3, ÖVP 2, SPÖ 1.">
+  <meta property="og:description" content="282 Beschlüsse des Nationalrats mit KI-Abgleich zum Wahlprogramm. Widersprüche: FPÖ 2, SPÖ 1, NEOS 1, ÖVP 0, GRÜNE 0.">
   <meta name="twitter:card" content="summary_large_image">
   <meta property="og:image" content="https://griesbchr.github.io/parlamentsmonitor/og.png">
   <meta charset="UTF-8">
@@ -331,6 +331,12 @@
     .am td { width: 64px; height: 34px; text-align: center; border-radius: 6px; font-weight: 700;
              font-variant-numeric: tabular-nums; }
     .am-self, .am-na { background: #f3f4f6; color: var(--ink-3); }
+    .am .pm-label { text-align: left; font-size: .8rem; font-weight: 600; padding-right: 10px; white-space: nowrap; }
+    .am.pm .pm-label { white-space: normal; min-width: 180px; }
+    .am.tm td { width: 44px; height: 28px; font-size: .74rem; }
+    .period-select { margin-left: auto; font-family: inherit; font-size: .78rem; text-transform: none;
+                     letter-spacing: 0; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; }
+    .alone-list { margin: 6px 0 0 16px; font-size: .8rem; line-height: 1.5; }
 
     /* ── Party pages ── */
     .party-header { border-left: 6px solid var(--pc); padding: 4px 0 4px 14px; margin-bottom: 18px; }
@@ -371,7 +377,9 @@
     @media (max-width: 800px) {
       header { padding: 10px 16px; gap: 10px; flex-wrap: wrap; }
       .brand p { display: none; }
-      header nav { gap: 12px; }
+      header nav { gap: 6px 14px; flex-wrap: wrap; margin-left: 0; width: 100%; }
+      #header-stand { display: none; }
+      .am.pm .pm-label { min-width: 120px; }
       #filterbar { padding: 8px 16px; gap: 6px; }
       .search-wrap { flex-basis: 100%; }
       #filterbar select { flex: 1 1 40%; min-width: 0; }
@@ -402,6 +410,7 @@
   <nav>
     <a href="#/uebersicht" id="nav-overview">Übersicht</a>
     <a href="#/themen" id="nav-topics">Themen</a>
+    <a href="#/wer-mit-wem" id="nav-who">Wer mit wem</a>
     <a href="#/methodik" id="nav-method">Methodik</a>
     <a href="#/impressum" id="nav-imprint">Impressum</a>
     <span id="header-stand">XXVIII. GP</span>
@@ -591,12 +600,14 @@ function route() {
   document.getElementById('nav-method').classList.toggle('active', page === 'methodik');
   document.getElementById('nav-topics').classList.toggle('active', page === 'themen' || page === 'thema');
   document.getElementById('nav-imprint').classList.toggle('active', page === 'impressum');
+  document.getElementById('nav-who').classList.toggle('active', page === 'wer-mit-wem');
   document.querySelectorAll('.item-card').forEach(c =>
     c.classList.toggle('active', page === 'beschluss' && c.dataset.id === arg));
 
   if (page === 'beschluss' && arg) loadDetail(+arg);
   else if (page === 'methodik')   renderMethod();
   else if (page === 'impressum')  renderImprint();
+  else if (page === 'wer-mit-wem') renderWhoWithWhom();
   else if (page === 'themen')     renderTopics();
   else if (page === 'thema' && arg)  renderTopic(decodeURIComponent(arg));
   else if (page === 'partei' && arg) renderParty(decodeURIComponent(arg));
@@ -844,6 +855,8 @@ function renderOverview() {
     <div class="card">
       <h3>Wer stimmt mit wem?</h3>
       ${agreementMatrix(allItems)}
+      <p style="margin-top:8px"><a href="#/wer-mit-wem">Mehr: wessen Anträge unterstützt werden, wer allein dasteht,
+         Entwicklung über die Zeit →</a></p>
     </div>
 
     <div class="card">
@@ -895,6 +908,140 @@ function agreementMatrix(items) {
     <div class="am-wrap"><table class="am"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
     <p class="muted" style="margin-top:8px">Anteil der Abstimmungen, bei denen zwei Parteien gleich gestimmt haben –
       nur strittige Beschlüsse (${contested} von ${items.length}); einstimmige Beschlüsse sind nicht mitgezählt.</p>`;
+}
+
+// ── Wer mit wem (page) ────────────────────────────────────
+function tagungOf(it) {
+  const ts = parseDatum(it.datum);
+  return tagungen.find(t => t.von && ts >= new Date(t.von).getTime()
+                         && ts <= (t.bis ? new Date(t.bis).getTime() + 86400000 : Infinity));
+}
+
+function proposerLabel(ps) {
+  if (ps.length === 1 && ps[0] === 'Bundesregierung') return 'Bundesregierung (Regierungsvorlagen)';
+  return ps.length === 1 ? `Anträge von ${ps[0]}` : `Gemeinsame Anträge von ${ps.join(', ')}`;
+}
+
+// rows: who proposed · columns: how each party voted on it
+function proposalMatrix() {
+  const groups = {};
+  allItems.forEach(it => {
+    if (!(it.proposers || []).length || !it.votes.length) return;
+    const key = it.proposers.join(', ');
+    (groups[key] = groups[key] || { ps: it.proposers, items: [] }).items.push(it);
+  });
+  const rows = Object.values(groups).filter(g => g.items.length >= 3)
+    .sort((a, b) => b.items.length - a.items.length);
+  const head = PARTIES.map(p => `<th>${chip(p)}</th>`).join('');
+  const body = rows.map(g => `<tr>
+      <th class="pm-label">${escHtml(proposerLabel(g.ps))} <span class="muted">(${g.items.length})</span></th>
+      ${PARTIES.map(p => {
+        const vs = g.items.map(it => it.votes.find(v => v.club === p)).filter(Boolean);
+        if (!vs.length) return '<td class="am-na">·</td>';
+        if (g.ps.includes(p)) return '<td class="am-self" title="eigene Anträge">eigen</td>';
+        const yes = vs.filter(v => v.in_favor).length, pct = Math.round(100 * yes / vs.length);
+        const bg = `rgba(46, 125, 50, ${(0.08 + 0.85 * pct / 100).toFixed(2)})`;
+        return `<td style="background:${bg};color:${pct > 55 ? '#fff' : 'var(--ink)'}"
+                    title="${p} stimmte bei ${yes} von ${vs.length} dafür">${pct} %</td>`;
+      }).join('')}</tr>`).join('');
+  return `<div class="am-wrap"><table class="am pm"><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+// how often a party is the only one voting no (or the only one voting yes)
+function aloneStats() {
+  const res = Object.fromEntries(PARTIES.map(p => [p, { against: [], for: [] }]));
+  allItems.forEach(it => {
+    if (it.votes.length < 3) return;
+    const pro = it.votes.filter(v => v.in_favor), con = it.votes.filter(v => !v.in_favor);
+    if (con.length === 1 && res[con[0].club]) res[con[0].club].against.push(it);
+    if (pro.length === 1 && res[pro[0].club]) res[pro[0].club].for.push(it);
+  });
+  return res;
+}
+
+// agreement of every party pair per Tagung (contested votes only)
+function agreementOverTime() {
+  const periods = tagungen.map(t => ({ t, items: allItems.filter(it => tagungOf(it) === t) }))
+    .filter(x => x.items.some(isContested));
+  const pairs = [];
+  PARTIES.forEach((a, i) => PARTIES.slice(i + 1).forEach(b => pairs.push([a, b])));
+  const stats = periods.map(x => agreementStats(x.items));
+  const head = periods.map(x => `<th title="${escHtml(x.t.label)}">${x.t.nr}.</th>`).join('');
+  const rows = pairs.map(([a, b]) => `<tr><th class="pm-label">${chip(a)} ${chip(b)}</th>${stats.map((m, k) => {
+      const { same, total } = m[a][b];
+      if (!total) return '<td class="am-na">·</td>';
+      const pct = Math.round(100 * same / total);
+      const bg = `rgba(59, 91, 219, ${(0.08 + 0.85 * pct / 100).toFixed(2)})`;
+      return `<td style="background:${bg};color:${pct > 55 ? '#fff' : 'var(--ink)'}"
+                  title="${escHtml(periods[k].t.label)}: ${same} von ${total} gleich">${pct}</td>`;
+    }).join('')}</tr>`).join('');
+  return { html: `<div class="am-wrap"><table class="am tm"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`,
+           periods };
+}
+
+function renderWhoWithWhom() {
+  document.title = 'Wer mit wem – Parlamentsmonitor';
+  const periodOpts = [...tagungen].reverse().filter(t => allItems.some(it => tagungOf(it) === t))
+    .map(t => `<option value="${escHtml(t.key)}">${escHtml(t.label)}</option>`).join('');
+
+  const alone = aloneStats();
+  const aloneRows = PARTIES.map(p => {
+    const a = alone[p];
+    const list = a.against.sort((x, y) => parseDatum(y.datum) - parseDatum(x.datum)).slice(0, 5)
+      .map(it => `<li><a href="#/beschluss/${it.id}">${escHtml(it.title)}</a> <span class="muted">${escHtml(it.datum)}</span></li>`).join('');
+    return `<tr>
+      <td><a href="#/partei/${encodeURIComponent(p)}">${chip(p)}</a></td>
+      <td class="num ${a.against.length ? 'contra-num' : ''}">${a.against.length}</td>
+      <td class="num">${a.for.length}</td>
+      <td>${a.against.length ? `<details><summary class="muted">neueste</summary><ul class="alone-list">${list}</ul></details>` : ''}</td>
+    </tr>`;
+  }).join('');
+
+  const time = agreementOverTime();
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="card intro">
+      <h2>Wer stimmt mit wem?</h2>
+      <p>Wie ähnlich die Parteien im Nationalrat abstimmen, wessen Anträge sie unterstützen, wer oft allein
+         dasteht – und wie sich das über die Zeit verändert. Einstimmige Beschlüsse sind beim Vergleich nicht
+         mitgezählt, weil sie jede Partei gleich aussehen lassen.</p>
+    </div>
+
+    <div class="card">
+      <h3>Gleiches Abstimmungsverhalten
+        <select id="am-period" class="period-select"><option value="">Gesamte Periode</option>${periodOpts}</select></h3>
+      <div id="am-box">${agreementMatrix(allItems)}</div>
+    </div>
+
+    <div class="card">
+      <h3>Wer unterstützt wessen Anträge?</h3>
+      ${proposalMatrix()}
+      <p class="muted" style="margin-top:8px">Anteil der Dafür-Stimmen, nach Antragsteller (laut Titel des Antrags).
+        Nur Anträge, über die im Plenum abgestimmt wurde – viele Oppositionsanträge werden schon im Ausschuss vertagt
+        und tauchen hier nicht auf.</p>
+    </div>
+
+    <div class="card">
+      <h3>Allein gegen alle</h3>
+      <table class="party-table">
+        <thead><tr><th></th><th class="num">einzige Gegenstimme</th><th class="num">einzige Zustimmung</th><th></th></tr></thead>
+        <tbody>${aloneRows}</tbody>
+      </table>
+      <p class="muted" style="margin-top:8px">Beschlüsse, bei denen eine Partei als einzige anders gestimmt hat als alle anderen.</p>
+    </div>
+
+    <div class="card">
+      <h3>Entwicklung nach Tagungen</h3>
+      ${time.periods.length ? time.html : '<p class="muted">Zu wenig Daten.</p>'}
+      <p class="muted" style="margin-top:8px">Prozent gleicher Stimmen bei strittigen Beschlüssen je Tagung
+        (Spalten = Tagungen, Bewegen der Maus über eine Zelle zeigt Details).</p>
+    </div>`;
+
+  document.getElementById('am-period').addEventListener('change', e => {
+    const t = tagungen.find(t => t.key === e.target.value);
+    const items = t ? allItems.filter(it => tagungOf(it) === t) : allItems;
+    document.getElementById('am-box').innerHTML = agreementMatrix(items);
+  });
 }
 
 // ── Party pages ───────────────────────────────────────────
@@ -1204,9 +1351,6 @@ function renderTopicItems(items) {
 }
 
 function renderTopicManifesto(d) {
-  if (!d.areas || !d.areas.length) {
-    return '<p class="muted">Für dieses Thema gibt es keine Zuordnung zu den Wahlprogrammen.</p>';
-  }
   const parties = PARTIES.filter(p => (d.sections[p] || []).length);
   if (!parties.length) return '<p class="muted">Keine passenden Abschnitte gefunden.</p>';
   const tabs = parties.map((p, i) =>
@@ -1225,8 +1369,8 @@ function renderTopicManifesto(d) {
     document.querySelectorAll('.party-panel').forEach(x => x.hidden = x.dataset.party !== b.dataset.party);
   })));
   return `
-    <p class="muted" style="margin-bottom:10px">Abschnitte aus den Wahlprogrammen 2024 zu
-      ${d.areas.map(escHtml).join(', ')} – wörtlich zitiert, automatisch zugeordnet.</p>
+    <p class="muted" style="margin-bottom:10px">Abschnitte aus den Wahlprogrammen 2024 zum Thema
+      ${escHtml(d.name)} – wörtlich zitiert, automatisch zugeordnet.</p>
     <div class="party-tabs">${tabs}</div>
     ${panels}`;
 }
@@ -1262,22 +1406,24 @@ function renderMethod() {
       <h3>So entsteht eine Bewertung</h3>
       <ol>
         <li>Die Wahlprogramme werden in rund 1.000 Abschnitte zerlegt und Themenbereichen zugeordnet.</li>
-        <li>Für jede Abstimmung und Partei werden per Stichwortsuche die drei passendsten Abschnitte des Programms gesucht.</li>
+        <li>Für jede Abstimmung und Partei werden die drei inhaltlich ähnlichsten Abschnitte des Programms gesucht (semantische Suche mit einem lokal laufenden Sprachmodell, das Bedeutungen statt einzelner Wörter vergleicht).</li>
         <li>Eine KI (Claude von Anthropic) erhält: Titel des Beschlusses, einen Auszug aus den Erläuterungen bzw. dem Gesetzestext,
             das Abstimmungsverhalten der Partei, ihre Begründung laut Parlamentskorrespondenz und die Programm-Abschnitte.</li>
-        <li>Sie vergibt eine Bewertung von −2 bis +2, wählt den passendsten Abschnitt und begründet ihre Einschätzung in ein bis zwei Sätzen.</li>
+        <li>Sie vergibt eine Bewertung von −2 bis +2, wählt den passendsten Abschnitt und begründet ihre Einschätzung in ein bis zwei Sätzen. Ein Widerspruch setzt voraus, dass sich das Programm konkret zum Gegenstand der Abstimmung äußert – allgemeine Ziele reichen nicht.</li>
+        <li>Jede Abstimmung, die dabei als Widerspruch eingestuft wird, bewertet die KI ein zweites Mal ausführlicher. Angezeigt wird das Ergebnis dieser zweiten Bewertung. Beide Schritte sind automatisch; eine Kontrolle durch Menschen findet nicht statt.</li>
       </ol>
       <table>${scale}</table>
 
       <h3>Grenzen</h3>
       <ul>
         <li>Die KI kann Gesetze, Programme oder Begründungen falsch verstehen. Jede Bewertung ist eine Einschätzung, kein Urteil.</li>
-        <li>Die Stichwortsuche kann relevante Stellen im Wahlprogramm übersehen – dann fällt die Bewertung oft auf „Kein Bezug“.</li>
+        <li>Die Suche kann relevante Stellen im Wahlprogramm übersehen – dann fällt die Bewertung oft auf „Kein Bezug“.</li>
         <li>Regierungsparteien stimmen Koalitionskompromissen zu, die vom eigenen Programm abweichen können.
             Oppositionsparteien lehnen Gesetze manchmal wegen Details ab, obwohl sie das Ziel teilen.</li>
         <li>Nicht jeder Beschluss wird in der Parlamentskorrespondenz ausführlich behandelt; dann fehlt die Begründung der Partei.</li>
         <li>Die Themen der Beschlüsse stammen vom Parlament. Die Zuordnung der Wahlprogramm-Abschnitte zu Themen
-            erfolgt dagegen automatisch per Stichwortsuche und ist nicht immer treffend.</li>
+            erfolgt dagegen automatisch über die inhaltliche Ähnlichkeit (Embeddings) zu kurzen Themenbeschreibungen
+            und ist nicht immer treffend. Sehr allgemeine Abschnitte, etwa Einleitungen, werden keinem Thema zugeordnet.</li>
         <li>Kurzinformationen ohne offizielle Zusammenfassung des Parlaments sind KI-generiert und entsprechend gekennzeichnet.</li>
       </ul>
 
