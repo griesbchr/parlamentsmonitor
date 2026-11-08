@@ -856,11 +856,11 @@ def _poll_and_store(client: anthropic.Anthropic,
     print_summary(conn)
 
 
-# ── Double-check of contradictions ────────────────────────────────────────────
-# Single assessments are noisy. Every contradiction (score ≤ -1) is assessed a
+# ── Double-check of contradictions and agreements ────────────────────────────
+# Single assessments are noisy. Every non-zero rating (contradiction or agreement) is assessed a
 # second time by a stronger model (VERIFY_MODEL) with thinking enabled; that more careful answer is stored. If it
-# still finds a contradiction, the row is marked checked=1 ("doppelt geprüft"),
-# otherwise checked=0 and the contradiction disappears.
+# keeps the direction (contradiction / agreement), the row is marked checked=1,
+# otherwise checked=0. checked is internal only and never shown on the site.
 
 def _build_for(conn, item_id: int, party: str) -> tuple[str, list[dict], str]:
     """Prompt, sections and vote direction for one (item, party) – same as the first pass."""
@@ -894,16 +894,16 @@ def _wait_for_batch(client: anthropic.Anthropic, batch_id: str) -> None:
 
 def verify_contradictions(client: anthropic.Anthropic, conn) -> None:
     rows = conn.execute(
-        "SELECT item_id, party FROM vote_analyses WHERE score <= -1 AND checked IS NULL"
+        "SELECT item_id, party, score FROM vote_analyses WHERE score != 0 AND checked IS NULL"
     ).fetchall()
     if not rows:
         return
-    log.info(f"Double-checking {len(rows)} contradictions with {VERIFY_MODEL} (thinking enabled) …")
+    log.info(f"Double-checking {len(rows)} ratings with {VERIFY_MODEL} (thinking enabled) …")
     built, reqs = {}, []
     for r in rows:
         prompt, sections, vote_dir = _build_for(conn, r["item_id"], r["party"])
         cid = "chk_" + _encode_custom_id(r["item_id"], r["party"])[len("vote_"):]
-        built[cid] = (r["item_id"], r["party"], sections, vote_dir)
+        built[cid] = (r["item_id"], r["party"], sections, vote_dir, r["score"])
         reqs.append(Request(custom_id=cid, params=MessageCreateParamsNonStreaming(
             model=VERIFY_MODEL, max_tokens=8000,   # room for thinking + answer
             messages=[{"role": "user", "content": prompt}],
@@ -914,7 +914,7 @@ def verify_contradictions(client: anthropic.Anthropic, conn) -> None:
 
     confirmed = rejected = failed = 0
     for res in client.messages.batches.results(batch.id):
-        item_id, party, sections, vote_dir = built[res.custom_id]
+        item_id, party, sections, vote_dir, old_score = built[res.custom_id]
         parsed = None
         if res.result.type == "succeeded":
             text = "".join(b.text for b in res.result.message.content if b.type == "text")
@@ -923,13 +923,13 @@ def verify_contradictions(client: anthropic.Anthropic, conn) -> None:
             failed += 1          # keep the first answer, unchecked
             continue
         store_result(conn, item_id, party, vote_dir, sections, parsed)
-        ok = int(parsed["score"]) <= -1
+        ok = (int(parsed["score"]) > 0) == (old_score > 0) and int(parsed["score"]) != 0
         conn.execute("UPDATE vote_analyses SET checked=? WHERE item_id=? AND party=?",
                      (1 if ok else 0, item_id, party))
         conn.commit()
         confirmed += ok
         rejected += not ok
-    log.info(f"Verification: {confirmed} contradictions confirmed, {rejected} withdrawn, "
+    log.info(f"Verification: {confirmed} ratings confirmed, {rejected} changed, "
              f"{failed} could not be checked.")
 
 
@@ -950,7 +950,7 @@ if __name__ == "__main__":
                    help="Poll + store results of a previous batch "
                         "(pass BATCH_ID or omit to load from saved file)")
     p.add_argument("--verify", action="store_true",
-                   help="Only double-check contradictions that are not checked yet")
+                   help="Only double-check non-zero ratings that are not checked yet")
     p.add_argument("--retrieval", choices=["embedding", "keyword"], default=RETRIEVAL,
                    help="How manifesto passages are found (default: embedding)")
     args = p.parse_args()
